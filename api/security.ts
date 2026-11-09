@@ -1,5 +1,12 @@
 import { env } from "./lib/env";
 
+/** Minimal D1 (or D1-compatible) shape so security state can live in durable storage. */
+export interface D1Like {
+  prepare(sql: string): {
+    bind(...values: unknown[]): { all(): Promise<any>; run(): Promise<any> };
+  };
+}
+
 interface RateLimitEntry {
   count: number;
   windowStart: number;
@@ -46,12 +53,72 @@ export function getClientIP(req: Request): string {
   );
 }
 
-export function checkRateLimit(
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
+}
+
+/**
+ * D1-backed fixed-window counter. Survives isolate recycling and is shared
+ * across isolates in a colo, unlike the in-process Map fallback.
+ */
+async function checkRateLimitD1(
+  db: D1Like,
+  key: string,
+  config: RateLimitConfig,
+  now: number,
+): Promise<RateLimitResult> {
+  const stmt = db.prepare(
+    "SELECT count, window_start FROM rate_limit_counters WHERE key = ?"
+  );
+  const existing = await stmt.bind(key).all();
+  const row = existing?.results?.[0];
+
+  if (!row || now - Number(row.window_start) > config.windowMs) {
+    await db
+      .prepare(
+        "INSERT INTO rate_limit_counters (key, window_start, count, last_seen) VALUES (?, ?, 1, ?) " +
+          "ON CONFLICT(key) DO UPDATE SET window_start = ?, count = 1, last_seen = ?"
+      )
+      .bind(key, now, now, now, now)
+      .run();
+    return { allowed: true, remaining: config.maxRequests - 1, resetAt: now + config.windowMs };
+  }
+
+  const count = Number(row.count);
+  if (count >= config.maxRequests) {
+    return { allowed: false, remaining: 0, resetAt: Number(row.window_start) + config.windowMs };
+  }
+
+  await db
+    .prepare("UPDATE rate_limit_counters SET count = count + 1, last_seen = ? WHERE key = ?")
+    .bind(now, key)
+    .run();
+  return {
+    allowed: true,
+    remaining: config.maxRequests - count - 1,
+    resetAt: Number(row.window_start) + config.windowMs,
+  };
+}
+
+export async function checkRateLimit(
   req: Request,
   config: RateLimitConfig = DEFAULT_RATE_LIMIT,
-): { allowed: boolean; remaining: number; resetAt: number } {
+  d1?: D1Like,
+): Promise<RateLimitResult> {
   const key = (config.keyGenerator || getClientIP)(req);
   const now = Date.now();
+
+  if (d1) {
+    try {
+      return await checkRateLimitD1(d1, key, config, now);
+    } catch (err) {
+      // Durable counter failed (e.g. table missing on an un-migrated env):
+      // degrade to the in-process fallback rather than blocking traffic.
+      console.error("[security] D1 rate limit failed, using in-process fallback:", err);
+    }
+  }
 
   pruneRateLimitStore(now);
 
@@ -274,21 +341,80 @@ export function getAuditLog(
 const revokedTokens = new Set<string>();
 const revokedUserSessions = new Map<number, number>();
 
-export function revokeToken(token: string): void {
-  if (token.length < 4096) {
-    revokedTokens.add(token);
-  }
+async function revokeTokenD1(db: D1Like, token: string): Promise<void> {
+  await db
+    .prepare("INSERT OR IGNORE INTO revoked_tokens (token, created_at) VALUES (?, ?)")
+    .bind(token, Date.now())
+    .run();
 }
 
-export function revokeAllUserSessions(userId: number): void {
+/** Revocation state lives in D1 when available (shared across isolates). */
+export async function revokeToken(token: string, d1?: D1Like): Promise<void> {
+  if (token.length >= 4096) return;
+  if (d1) {
+    try {
+      await revokeTokenD1(d1, token);
+      return;
+    } catch (err) {
+      console.error("[security] D1 token revocation failed, using in-process fallback:", err);
+    }
+  }
+  revokedTokens.add(token);
+}
+
+export async function revokeAllUserSessions(userId: number, d1?: D1Like): Promise<void> {
+  if (d1) {
+    try {
+      await dbUpsertRevocation(d1, userId);
+      return;
+    } catch (err) {
+      console.error("[security] D1 session revocation failed, using in-process fallback:", err);
+    }
+  }
   revokedUserSessions.set(userId, Date.now());
 }
 
-export function isTokenRevoked(token: string): boolean {
+async function dbUpsertRevocation(d1: D1Like, userId: number): Promise<void> {
+  const now = Date.now();
+  await db
+    .prepare(
+      "INSERT INTO user_session_revocations (user_id, revoked_at) VALUES (?, ?) " +
+        "ON CONFLICT(user_id) DO UPDATE SET revoked_at = ?"
+    )
+    .bind(userId, now, now)
+    .run();
+}
+
+export async function isTokenRevoked(token: string, d1?: D1Like): Promise<boolean> {
+  if (d1) {
+    try {
+      const res = await d1
+        .prepare("SELECT 1 as x FROM revoked_tokens WHERE token = ? LIMIT 1")
+        .bind(token)
+        .all();
+      if (res?.results?.length) return true;
+      return false;
+    } catch (err) {
+      console.error("[security] D1 token lookup failed, using in-process fallback:", err);
+    }
+  }
   return revokedTokens.has(token);
 }
 
-export function isUserSessionRevoked(userId: number, tokenIssuedAt: number): boolean {
+export async function isUserSessionRevoked(userId: number, tokenIssuedAt: number, d1?: D1Like): Promise<boolean> {
+  if (d1) {
+    try {
+      const res = await d1
+        .prepare("SELECT revoked_at FROM user_session_revocations WHERE user_id = ? LIMIT 1")
+        .bind(userId)
+        .all();
+      const row = res?.results?.[0];
+      if (row) return tokenIssuedAt < Number(row.revoked_at);
+      return false;
+    } catch (err) {
+      console.error("[security] D1 session lookup failed, using in-process fallback:", err);
+    }
+  }
   const revokedAt = revokedUserSessions.get(userId);
   return revokedAt ? tokenIssuedAt < revokedAt : false;
 }
