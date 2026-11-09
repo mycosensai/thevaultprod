@@ -16,6 +16,7 @@ mode = "smart"
 binding = "DB"
 database_name = "thevault-db"
 database_id = "375949ce-7c7d-4822-8235-461446769258"
+migrations_dir = "migrations"
 
 [vars]
 ENVIRONMENT = "production"
