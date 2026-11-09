@@ -15,7 +15,7 @@ declare global {
 import { appRouter } from "../api/router";
 import { createContext } from "../api/context";
 import { setDb } from "../api/queries/connection";
-import { setCloudflareEnv } from "../api/lib/env";
+import { setCloudflareEnv, assertAppSecretConfigured } from "../api/lib/env";
 import { checkRateLimit, getSecurityHeaders, getCorsConfig } from "../api/security";
 
 type Env = Record<string, unknown> & {
@@ -134,6 +134,10 @@ app.use(async (c, next) => {
     setDb(db);
   }
 
+  // Fail hard when the JWT signing secret is unset in production —
+  // no hardcoded fallback exists, so auth would otherwise be forgeable.
+  assertAppSecretConfigured();
+
   await next();
 });
 
@@ -167,7 +171,7 @@ app.use("/api/*", async (c, next) => {
     c.req.path.includes("oauth.callback");
 
   const config = isAuth ? { maxRequests: 5, windowMs: 60_000 } : undefined;
-  const result = checkRateLimit(c.req.raw, config);
+  const result = await checkRateLimit(c.req.raw, config, getD1(c.env));
 
   if (!result.allowed) {
     return c.json(
@@ -260,7 +264,8 @@ app.post("/api/stripe/webhook", async (c) => {
     await db.prepare("UPDATE stripe_sessions SET status = ? WHERE session_id = ?").bind("completed", sessionId).run();
     const session = await db.prepare("SELECT listing_id FROM stripe_sessions WHERE session_id = ? LIMIT 1").bind(sessionId).first<{ listing_id: number }>();
     if (session?.listing_id) {
-      await db.prepare("UPDATE listings SET status = ? WHERE id = ?").bind("sold", session.listing_id).run();
+      // Conditional inventory lock: only the first finalizer wins the listing
+      await db.prepare("UPDATE listings SET status = ? WHERE id = ? AND status != ?").bind("sold", session.listing_id, "sold").run();
     }
   }
 

@@ -31,17 +31,41 @@ interface CloudflareEnv {
   DB?: any;
 }
 
-let cfEnv: CloudflareEnv = {
-  APP_SECRET: "development-secret-change-in-production",
-};
+let cfEnv: Partial<CloudflareEnv> = {};
+
+/** Development-only ephemeral secret; production must set APP_SECRET. */
+function devFallbackSecret(): string {
+  return `dev-only-${globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)}${Date.now()}`;
+}
 
 export function setCloudflareEnv(env: Record<string, unknown>) {
   cfEnv = { ...cfEnv, ...(env as any) };
+  const nodeEnv = typeof cfEnv.NODE_ENV === "string" ? cfEnv.NODE_ENV : "";
+  if (nodeEnv === "production" && !cfEnv.APP_SECRET) {
+    throw new Error(
+      "APP_SECRET is not configured: refusing to start in production without a JWT signing secret"
+    );
+  }
+}
+
+/** Fail-hard accessor: no hardcoded fallback secret exists. */
+export function assertAppSecretConfigured(): void {
+  if (!cfEnv.APP_SECRET) {
+    const nodeEnv = typeof cfEnv.NODE_ENV === "string" ? cfEnv.NODE_ENV : "";
+    if (nodeEnv === "production") {
+      throw new Error("APP_SECRET is not configured: refusing to serve requests in production");
+    }
+    // Dev: seed an ephemeral random secret so nothing is hardcoded.
+    cfEnv.APP_SECRET = devFallbackSecret();
+  }
 }
 
 export const env = {
   get appId(): string { return cfEnv.APP_ID || ""; },
-  get appSecret(): string { return cfEnv.APP_SECRET || "fallback-secret"; },
+  get appSecret(): string {
+    assertAppSecretConfigured();
+    return cfEnv.APP_SECRET as string;
+  },
   get isProduction(): boolean { return cfEnv.NODE_ENV === "production"; },
   get databaseUrl(): string { return cfEnv.DATABASE_URL || ""; },
   get kimiAuthUrl(): string { return cfEnv.KIMI_AUTH_URL || ""; },
