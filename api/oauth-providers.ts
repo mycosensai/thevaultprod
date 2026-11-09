@@ -19,6 +19,7 @@ interface ProviderConfig {
     id: string;
     name: string;
     email: string | null;
+    emailVerified: boolean;
     avatar: string | null;
   };
 }
@@ -36,6 +37,7 @@ export const PROVIDER_CONFIGS: Record<OAuthProvider, ProviderConfig> = {
       id: data.id,
       name: data.name || "Google User",
       email: data.email || null,
+      emailVerified: Boolean(data.verified_email),
       avatar: data.picture || null,
     }),
   },
@@ -62,6 +64,8 @@ export const PROVIDER_CONFIGS: Record<OAuthProvider, ProviderConfig> = {
       id: String(data.id),
       name: data.name || data.login || "GitHub User",
       email: data.email || null,
+      // Public /user email is only present (and public) when verified by GitHub.
+      emailVerified: Boolean(data.email),
       avatar: data.avatar_url || null,
     }),
   },

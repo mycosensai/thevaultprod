@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { appraisals } from "@db/schema";
 import { eq } from "drizzle-orm";
@@ -18,7 +18,7 @@ export const emailRouter = createRouter({
    * Send appraisal results via email
    * Requires appraisalId and recipient email
    */
-  sendAppraisalResult: publicQuery
+  sendAppraisalResult: authedQuery
     .input(
       z.object({
         appraisalId: z.number(),
@@ -38,6 +38,12 @@ export const emailRouter = createRouter({
 
       if (!appraisal) {
         return { success: false, error: "Appraisal not found" };
+      }
+
+      // Only the appraisal's owner (or an admin) may email it out.
+      const appraisalOwner = (appraisal as any).userId;
+      if (ctx.user.role !== "admin" && appraisalOwner !== ctx.user.id) {
+        return { success: false, error: "Forbidden" };
       }
 
       const ev = Number(appraisal.estimatedValue) || 0;
@@ -104,7 +110,7 @@ export const emailRouter = createRouter({
   /**
    * Test email configuration
    */
-  testConfig: publicQuery.query(async () => {
+  testConfig: adminQuery.query(async () => {
     return { configured: !!(env as any).resendApiKey };
   }),
 });

@@ -100,8 +100,9 @@ export async function handleOAuthCallback(c: Context, provider: OAuthProvider) {
         .where(eq(users.email, profile.email))
         .limit(1);
 
-      if (existingByEmail) {
-        // Link OAuth to existing account
+      if (existingByEmail && profile.emailVerified) {
+        // Link OAuth to existing account — only when the provider verified
+        // the email, otherwise this is account takeover by unverified email.
         await db
           .update(users)
           .set({

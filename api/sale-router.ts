@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, saleTransactions, sellerPayouts, commissionTiers } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -190,7 +190,7 @@ export const saleRouter = createRouter({
   /**
    * Mark sale as payment received
    */
-  recordPayment: publicQuery
+  recordPayment: adminQuery
     .input(z.object({ saleId: z.number(), stripePaymentIntentId: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -370,9 +370,9 @@ export const saleRouter = createRouter({
   /**
    * Get sale by ID with details
    */
-  getSale: publicQuery
+  getSale: authedQuery
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
       const [sale] = await db
         .select()
@@ -380,6 +380,15 @@ export const saleRouter = createRouter({
         .where(eq(saleTransactions.id, input.id))
         .limit(1);
       if (!sale) return null;
+
+      // Sellers see their own sales; buyers their own purchases; admins everything.
+      if (
+        ctx.user.role !== "admin" &&
+        sale.sellerId !== ctx.user.id &&
+        sale.buyerId !== ctx.user.id
+      ) {
+        return null;
+      }
 
       const [listing] = await db
         .select()
@@ -393,7 +402,7 @@ export const saleRouter = createRouter({
   /**
    * Get sale stats
    */
-  stats: publicQuery.query(async () => {
+  stats: adminQuery.query(async () => {
     const db = getDb();
     const sales = await db.select().from(saleTransactions);
     const payouts = await db.select().from(sellerPayouts);

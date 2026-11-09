@@ -22,18 +22,7 @@ import { shippingRouter } from "./shipping-router";
 import { saleRouter } from "./sale-router";
 import { emailRouter } from "./email-router";
 import { partnershipRouter } from "./partnership-router";
-import { agentWorkflowRouter } from "./agent-workflow-router";
-import { samsonRouter } from "./samson-router";
 import { internetResearchRouter } from "./internet-research-router";
-import { autonomousRouter } from "./autonomous-router";
-import { selfAuditRouter } from "./self-audit-router";
-import { interAgentPoliceRouter } from "./inter-agent-police-router";
-import { accountingRouter } from "./accounting-router";
-import { dailyReportRouter } from "./daily-report-router";
-import { userWorkflowRouter } from "./user-workflow-router";
-import { adminPromptRouter } from "./admin-prompt-router";
-import { coldEmailRouter } from "./cold-email-router";
-import { graphWorkflowRouter } from "./graph-workflow-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -62,18 +51,7 @@ export const appRouter = createRouter({
   sale: saleRouter,
   email: emailRouter,
   partnership: partnershipRouter,
-  workflow: agentWorkflowRouter,
-  samson: samsonRouter,
   research: internetResearchRouter,
-  autonomous: autonomousRouter,
-  selfAudit: selfAuditRouter,
-  police: interAgentPoliceRouter,
-  accounting: accountingRouter,
-  dailyReport: dailyReportRouter,
-  userWorkflow: userWorkflowRouter,
-  adminPrompt: adminPromptRouter,
-  coldEmail: coldEmailRouter,
-  graphWorkflow: graphWorkflowRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -33,8 +33,6 @@ const SocialLeads = lazy(() => import('./pages/SocialLeads'))
 const SaleManager = lazy(() => import('./pages/SaleManager'))
 const Agents = lazy(() => import('./pages/Agents'))
 const AgentProject = lazy(() => import('./pages/AgentProject'))
-const AgentCommand = lazy(() => import('./pages/AgentCommand'))
-const MarketingDashboard = lazy(() => import('./pages/MarketingDashboard'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function LoadingFallback() {
@@ -86,8 +84,7 @@ export default function App() {
             <Route path="/sale/:id" element={<SaleManager />} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/:projectId" element={<AgentProject />} />
-            <Route path="/admin/agents" element={<AgentCommand />} />
-            <Route path="/admin/marketing" element={<MarketingDashboard />} />
+            <Route path="/admin/agents" element={<Agents />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<NotFound />} />
           </Route>
