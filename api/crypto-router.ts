@@ -5,6 +5,7 @@ import { cryptoPayments, listings } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { logAudit, getClientIP } from "./security";
+import { markListingSold } from "./lib/inventory";
 import { env } from "./lib/env";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
@@ -273,6 +274,7 @@ export const cryptoRouter = createRouter({
 
       const result = await db.insert(cryptoPayments).values({
         listingId: input.listingId,
+        userId: ctx.user.id,
         buyerAddress: input.buyerAddress,
         sellerAddress: treasury,
         amount: formattedAmount,
@@ -332,11 +334,26 @@ export const cryptoRouter = createRouter({
         .limit(1);
 
       if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "Payment not found" });
+      // Buyer identity must match the payment record: a logged-in user can
+      // never attach a tx to someone else's payment.
+      if (payment.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not your payment" });
+      }
       if (payment.status === "confirmed") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Payment already confirmed" });
       }
       if (payment.txHash && payment.txHash !== input.txHash) {
         throw new TRPCError({ code: "CONFLICT", message: "A different transaction is already attached" });
+      }
+
+      // A single on-chain tx must only ever pay for one payment record.
+      const [txOwner] = await db
+        .select({ id: cryptoPayments.id })
+        .from(cryptoPayments)
+        .where(eq(cryptoPayments.txHash, input.txHash))
+        .limit(1);
+      if (txOwner && txOwner.id !== input.paymentId) {
+        throw new TRPCError({ code: "CONFLICT", message: "Transaction already submitted for another payment" });
       }
 
       const destination = payment.sellerAddress || getTreasuryAddress();
@@ -375,8 +392,11 @@ export const cryptoRouter = createRouter({
         })
         .where(eq(cryptoPayments.id, input.paymentId));
 
-      // Mark listing as sold
-      await db.update(listings).set({ status: "sold" }).where(eq(listings.id, payment.listingId));
+      // Mark listing as sold — conditional single-statement inventory lock
+      const won = await markListingSold(db, payment.listingId);
+      if (!won) {
+        throw new TRPCError({ code: "CONFLICT", message: "Listing was already sold" });
+      }
 
       logAudit({
         ip: getClientIP(ctx.req),

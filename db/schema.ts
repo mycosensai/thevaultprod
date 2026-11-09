@@ -145,6 +145,7 @@ export type BlockchainCert = typeof blockchainCerts.$inferSelect;
 export const cryptoPayments = sqliteTable("crypto_payments", {
   id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
   listingId: integer("listing_id").notNull(),
+  userId: integer("user_id"),
   buyerAddress: text("buyer_address").notNull(),
   sellerAddress: text("seller_address"),
   amount: text("amount").notNull(),
@@ -1051,3 +1052,24 @@ export const marketingAnalytics = sqliteTable("marketing_analytics", {
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 export type MarketingAnalytic = typeof marketingAnalytics.$inferSelect;
+
+// ─── SECURITY STATE (D1-backed rate limiting & token revocation) ───
+export const rateLimitCounters = sqliteTable("rate_limit_counters", {
+  key: text("key").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  count: integer("count").notNull(),
+  lastSeen: integer("last_seen").notNull(),
+});
+export type RateLimitCounter = typeof rateLimitCounters.$inferSelect;
+
+export const revokedTokens = sqliteTable("revoked_tokens", {
+  token: text("token").primaryKey(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+});
+export type RevokedToken = typeof revokedTokens.$inferSelect;
+
+export const userSessionRevocations = sqliteTable("user_session_revocations", {
+  userId: integer("user_id").primaryKey(),
+  revokedAt: integer("revoked_at").notNull(),
+});
+export type UserSessionRevocation = typeof userSessionRevocations.$inferSelect;
