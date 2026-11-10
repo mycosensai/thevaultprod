@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { getDb } from "./queries/connection";
+import { getDb, getRawD1 } from "./queries/connection";
 import { blockchainCerts, listings } from "@db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { logAudit, getClientIP, checkRateLimit } from "./security";
@@ -192,11 +192,17 @@ export const blockchainRouter = createRouter({
         .optional(),
     )
     .query(async ({ input, ctx }) => {
-      const limit = await checkRateLimit(ctx.req, {
-        windowMs: 60_000,
-        maxRequests: 20,
-        keyGenerator: (req) => `token-market:${getClientIP(req)}`,
-      });
+      // Pass the D1 binding so the counter is durable across isolates
+      // (same wiring as the Hono middleware rate limiter).
+      const limit = await checkRateLimit(
+        ctx.req,
+        {
+          windowMs: 60_000,
+          maxRequests: 20,
+          keyGenerator: (req) => `token-market:${getClientIP(req)}`,
+        },
+        getRawD1() ?? undefined
+      );
       if (!limit.allowed) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Token quotes are rate limited. Try again in a minute." });
       }

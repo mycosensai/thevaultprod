@@ -2,7 +2,6 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@db/schema";
 import type { D1Like } from "../security";
 
-let dbInstance: any = null;
 let rawD1: D1Like | null = null;
 
 export function setDb(d1: D1Like | null | undefined) {
