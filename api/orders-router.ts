@@ -97,7 +97,17 @@ export const ordersRouter = createRouter({
         if (!isAdmin) throw new Error("Forbidden");
         updateData.paymentStatus = input.paymentStatus;
       }
-      if (input.orderStatus) updateData.orderStatus = input.orderStatus;
+      if (input.orderStatus) {
+        // Order state machine: the buyer/order owner may only advance the
+        // order once payment has completed (server-side check — money state
+        // gates fulfilment state). Admins may always correct status.
+        if (!isAdmin && order.paymentStatus !== "completed") {
+          throw new Error(
+            "Forbidden: order status cannot advance before payment is completed"
+          );
+        }
+        updateData.orderStatus = input.orderStatus;
+      }
       if (input.trackingNumber)
         updateData.trackingNumber = input.trackingNumber;
 
