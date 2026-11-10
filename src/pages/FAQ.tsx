@@ -36,7 +36,7 @@ const faqs = [
   },
   {
     q: 'What is blockchain certification?',
-    a: 'Verified items receive a permanent certificate on the Solana blockchain, including a unique token ID, smart contract address, and block hash. This creates an immutable record of authenticity that can be verified by anyone, forever.'
+    a: 'A seller can launch a token for a listing on Base through Clanker. The seller signs with their own wallet. The token and its liquidity stay in a Uniswap v4 pool that cannot have liquidity removed. Older certificate records that were not signed on Base are labeled as legacy records.'
   },
   {
     q: 'How do returns work?',

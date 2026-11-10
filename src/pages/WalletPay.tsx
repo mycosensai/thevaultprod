@@ -1,19 +1,22 @@
 import { useParams, Link } from 'react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { trpc } from '@/providers/trpc'
 import {
   Diamond, ArrowLeft, Loader2, AlertCircle,
   Bitcoin, ShieldCheck, Wallet
 } from 'lucide-react'
 import { FooterDisclaimer } from '@/components/LiabilityDisclaimer'
-import { openVaultWallet, subscribeVaultWallet } from '@/lib/walletconnect'
+import { useWallet } from '@solana/wallet-adapter-react'
 
 export default function WalletPay() {
   const { id } = useParams<{ id: string }>()
   const listingId = parseInt(id || '0')
   const [walletAddress, setWalletAddress] = useState('')
   const [paymentCreated, setPaymentCreated] = useState(false)
-  const [walletStatus, setWalletStatus] = useState<{ isConnected: boolean; address: string }>({ isConnected: false, address: '' })
+  const solana = useWallet()
+  const connectedAddress = solana.publicKey?.toBase58() || ''
+  const walletStatus = { isConnected: solana.connected, address: connectedAddress }
+  const buyerAddress = walletAddress || connectedAddress
 
   const { data: listing, isLoading } = trpc.listings.getById.useQuery({ id: listingId })
   const { data: rates } = trpc.crypto.getRates.useQuery()
@@ -27,33 +30,24 @@ export default function WalletPay() {
 
   const [txHash, setTxHash] = useState('')
 
-  useEffect(() => {
-    let unsub: null | (() => void) = null
-    subscribeVaultWallet((state) => {
-      setWalletStatus({ isConnected: state.isConnected, address: state.address })
-      if (state.isConnected && state.address) setWalletAddress(state.address)
-    }).then((u) => { unsub = u }).catch(() => {})
-    return () => { unsub?.() }
-  }, [])
-
   const handleCreatePayment = () => {
-    if (walletAddress.length < 32) return
+    if (buyerAddress.length < 32) return
 
     createPayment.mutate({
           listingId,
-          buyerAddress: walletAddress,
+          buyerAddress,
           currency
         })
   }
 
   const handleConnect = async () => {
-    try {
-      const state = await openVaultWallet('solana')
-      setWalletStatus({ isConnected: state.isConnected, address: state.address })
-      if (state.isConnected && state.address) setWalletAddress(state.address)
-    } catch {
-      // ignore
+    const phantom = solana.wallets.find((wallet) => wallet.adapter.name === 'Phantom') ?? solana.wallets[0]
+    if (!phantom) return
+    if (solana.wallet?.adapter.name === phantom.adapter.name) {
+      await solana.connect()
+      return
     }
+    solana.select(phantom.adapter.name)
   }
 
   const handleSubmitTx = () => {
@@ -212,7 +206,7 @@ export default function WalletPay() {
               <div className="flex gap-2">
                 <input type="text" value={walletAddress} onChange={(e) => setWalletAddress(e.target.value)} placeholder="Solana address..."
                   className="flex-1 bg-[#1E1E1E] border border-[#C9A84C]/20 text-[#F5EED8] text-sm py-3 px-4 outline-none focus:border-[#C9A84C] font-mono placeholder:text-[#8A6E2F] placeholder:font-sans text-xs" />
-                <button onClick={handleCreatePayment} disabled={walletAddress.length < 32 || createPayment.isPending}
+                <button onClick={handleCreatePayment} disabled={buyerAddress.length < 32 || createPayment.isPending}
                   className="px-6 py-3 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[10px] tracking-[2px] uppercase font-bold disabled:opacity-50 transition-all">
                   {createPayment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continue'}
                 </button>
