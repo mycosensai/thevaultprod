@@ -254,13 +254,24 @@ app.post("/api/stripe/webhook", async (c) => {
 
   if (!event.id || !event.type) return c.json({ ok: false, error: "Invalid Stripe event" }, 400);
 
-  const duplicate = await db.prepare("SELECT id FROM webhook_events WHERE id = ? LIMIT 1").bind(event.id).first();
-  if (duplicate) return c.json({ ok: true, duplicate: true, eventId: event.id });
+  // Atomic idempotency claim: INSERT ... ON CONFLICT DO NOTHING on the
+  // primary key makes exactly one isolate win; losers short-circuit as a
+  // duplicate before any side effects run. (SELECT-then-insert was racy
+  // under Stripe's at-least-once redelivery.)
+  const claimed = await db
+    .prepare(
+      "INSERT INTO webhook_events (id, provider, event_type, processed_at, metadata) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
+    )
+    .bind(event.id, "stripe", event.type, Date.now(), JSON.stringify({ pending: true }))
+    .run();
+  if (!claimed?.meta?.changes) {
+    return c.json({ ok: true, duplicate: true, eventId: event.id });
+  }
 
   if (!STRIPE_ALLOWED_EVENTS.has(event.type)) {
     await db
-      .prepare("INSERT INTO webhook_events (id, provider, event_type, processed_at, metadata) VALUES (?, ?, ?, ?, ?)")
-      .bind(event.id, "stripe", event.type, Date.now(), JSON.stringify({ ignored: true }))
+      .prepare("UPDATE webhook_events SET metadata = ? WHERE id = ?")
+      .bind(JSON.stringify({ ignored: true, processed_at: Date.now() }), event.id)
       .run();
     return c.json({ ok: true, ignored: true, type: event.type });
   }
@@ -282,8 +293,8 @@ app.post("/api/stripe/webhook", async (c) => {
   }
 
   await db
-    .prepare("INSERT INTO webhook_events (id, provider, event_type, processed_at, metadata) VALUES (?, ?, ?, ?, ?)")
-    .bind(event.id, "stripe", event.type, Date.now(), JSON.stringify({ sessionId }))
+    .prepare("UPDATE webhook_events SET metadata = ? WHERE id = ?")
+    .bind(JSON.stringify({ sessionId, processed_at: Date.now() }), event.id)
     .run();
 
   return c.json({ ok: true, eventId: event.id, type: event.type });
