@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { useAccount } from 'wagmi'
 import { trpc } from '@/providers/trpc'
 import { useAuth } from '@/hooks/useAuth'
+import { launchVaultToken } from '@/lib/clanker-launch'
 import {
   Diamond, Plus, X, Loader2, Sparkles, CheckCircle2, ShieldCheck, Bitcoin
 } from 'lucide-react'
@@ -19,21 +21,15 @@ export default function Sell() {
   const [featureInput, setFeatureInput] = useState('')
   const [isConsignment, setIsConsignment] = useState(false)
   const [certifyOnChain, setCertifyOnChain] = useState(false)
-  const [walletAddress, setWalletAddress] = useState('')
+  const [launching, setLaunching] = useState(false)
+  const [launchMessage, setLaunchMessage] = useState('')
+  const { address, isConnected } = useAccount()
 
   const { data: categories } = trpc.categories.list.useQuery()
   const utils = trpc.useUtils()
 
   const createListing = trpc.listings.create.useMutation({
     onSuccess: (data) => {
-      if (certifyOnChain && walletAddress && data.id) {
-        certifyMutation.mutate({
-          listingId: data.id,
-          itemName: title,
-          itemDescription: description,
-          walletAddress,
-        })
-      }
       setCreatedListingId(data.id)
       setSubmitted(true)
       utils.listings.invalidate()
@@ -41,6 +37,32 @@ export default function Sell() {
   })
 
   const certifyMutation = trpc.blockchain.certify.useMutation()
+  const confirmLaunch = trpc.blockchain.confirmLaunch.useMutation()
+
+  const signLaunch = async () => {
+    if (!createdListingId || !address) return
+    setLaunching(true)
+    setLaunchMessage('')
+    try {
+      const intent = await certifyMutation.mutateAsync({
+        listingId: createdListingId,
+        itemName: title,
+        itemDescription: description || undefined,
+        walletAddress: address,
+      })
+      if (!intent.launch) {
+        setLaunchMessage(intent.message)
+        return
+      }
+      const txHash = await launchVaultToken(intent.launch)
+      const confirmed = await confirmLaunch.mutateAsync({ listingId: createdListingId, txHash })
+      setLaunchMessage(`${confirmed.message} ${confirmed.token ?? ''}`)
+    } catch (error) {
+      setLaunchMessage(error instanceof Error ? error.message : 'Launch failed')
+    } finally {
+      setLaunching(false)
+    }
+  }
 
   const createFeeCheckout = trpc.listingFee.createCheckout.useMutation({
     onSuccess: (data) => {
@@ -152,6 +174,28 @@ export default function Sell() {
               </div>
             )}
           </div>
+
+          {certifyOnChain && (
+            <div className="mt-6 border border-[#C9A84C]/30 bg-[#161616] p-6">
+              <p className="mb-2 font-cinzel text-[10px] tracking-[3px] text-[#C9A84C] uppercase">Token launch</p>
+              <p className="mb-4 text-[11px] leading-relaxed text-[#C8BC98]">
+                Clanker v5 on Base. Deploy fee is 0 ETH. You sign in your wallet. The 1% trade tax splits 0.50% to you and 0.50% to Clanker. Anti-sniper fee starts at 99% and falls over 20 seconds. There is no creator buy, so there is no launch slippage.
+              </p>
+              {isConnected && address ? (
+                <button
+                  type="button"
+                  onClick={signLaunch}
+                  disabled={launching}
+                  className="flex w-full items-center justify-center gap-3 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] py-4 font-cinzel text-[11px] font-bold tracking-[3px] text-[#080808] uppercase disabled:opacity-50"
+                >
+                  {launching ? <><Loader2 className="h-4 w-4 animate-spin" /> Waiting for wallet...</> : <>Sign launch as {address.slice(0, 6)}…{address.slice(-4)}</>}
+                </button>
+              ) : (
+                <p className="text-[11px] text-[#C8BC98]">Connect a Base wallet from the toolbar, then sign the launch.</p>
+              )}
+              {launchMessage && <p className="mt-3 text-[11px] text-[#F5EED8]">{launchMessage}</p>}
+            </div>
+          )}
 
           <div className="mt-6 text-center">
             <button
@@ -371,20 +415,15 @@ export default function Sell() {
                 />
                 <div>
                   <span className="text-xs text-[#C9A84C] font-cinzel font-semibold tracking-[1px]">Certify & Tokenize on Blockchain</span>
-                  <p className="text-[10px] text-[#8A6E2F] mt-0.5">+0.002 SOL fee &middot; Smart contract &middot; Certificate &middot; Tokenized exposure</p>
+                  <p className="text-[10px] text-[#8A6E2F] mt-0.5">Clanker on Base &middot; 0 ETH deploy fee &middot; You sign &middot; Liquidity cannot be removed</p>
                 </div>
               </label>
 
               {certifyOnChain && (
                 <div className="pl-7">
-                  <label className="block text-[9px] tracking-[3px] uppercase text-[#C9A84C] mb-2">Your Wallet Address (0x...)</label>
-                  <input
-                    type="text"
-                    value={walletAddress}
-                    onChange={(e) => setWalletAddress(e.target.value)}
-                    placeholder="Solana wallet address..."
-                    className="w-full bg-[#1E1E1E] border border-[#C9A84C]/20 text-[#F5EED8] text-sm py-3 px-4 outline-none focus:border-[#C9A84C] font-mono placeholder:text-[#8A6E2F] placeholder:font-sans text-xs"
-                  />
+                  <p className="mb-2 font-mono text-[10px] text-[#C8BC98]">
+                    {isConnected && address ? `Signing wallet ${address}` : 'Connect a wallet in the toolbar before you launch.'}
+                  </p>
                   <div className="mt-3 space-y-2">
                     <div className="flex items-start gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -433,12 +472,12 @@ export default function Sell() {
                         <span className="text-[9px] tracking-[2px] uppercase text-[#C9A84C] font-cinzel font-semibold">Blockchain Certification</span>
                       </div>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-[#C8BC98]">Certification Fee</span>
-                        <span className="text-[#C9A84C] font-cinzel">0.002 SOL</span>
+                        <span className="text-[#C8BC98]">Deploy fee</span>
+                        <span className="text-[#C9A84C] font-cinzel">0 ETH + gas</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-[#C8BC98]">What you get</span>
-                        <span className="text-[#8A6E2F]">Solana smart contract + Certificate</span>
+                        <span className="text-[#C8BC98]">Creator share of trades</span>
+                        <span className="text-[#8A6E2F]">0.50%</span>
                       </div>
                     </div>
                   )}

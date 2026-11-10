@@ -2,216 +2,285 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { blockchainCerts, listings } from "@db/schema";
-import { eq, desc } from "drizzle-orm";
-import { logAudit, getClientIP } from "./security";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { logAudit, getClientIP, checkRateLimit } from "./security";
 import { TRPCError } from "@trpc/server";
 import { autoTriggerFromAction } from "./lib/auto-trigger";
-import { Keypair, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { readErc20, readLaunchTransaction } from "./lib/base-rpc";
+import { quoteMarkets } from "./lib/token-market";
+import { TokenizationError } from "./lib/tokenization-error";
+import {
+  runCertify,
+  runConfirm,
+  type CertRecord,
+  type TokenizationStore,
+} from "./lib/tokenization";
 
-const SOL_CHARS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
+const SOL_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-/**
- * Generate a real Solana keypair for certificate minting.
- * This creates an actual Ed25519 keypair that can be used on-chain.
- */
-function generateCertKeypair(): { publicKey: string; secretKey: string } {
-  const kp = Keypair.generate();
+function asTokenizationError(error: unknown): TRPCError | null {
+  if (!(error instanceof TokenizationError)) return null;
+  return new TRPCError({ code: error.code, message: error.message });
+}
+
+function toCert(row: typeof blockchainCerts.$inferSelect): CertRecord {
   return {
-    publicKey: kp.publicKey.toBase58(),
-    secretKey: Buffer.from(kp.secretKey).toString("base64"),
+    id: row.id,
+    listingId: row.listingId,
+    userId: row.userId,
+    certificateHash: row.certificateHash,
+    contractAddress: row.contractAddress,
+    tokenId: row.tokenId,
+    blockHash: row.blockHash,
+    blockNumber: row.blockNumber,
+    network: row.network,
+    itemName: row.itemName,
+    itemDescription: row.itemDescription,
+    metadataUri: row.metadataUri,
+    status: row.status,
+    certificationFee: row.certificationFee,
+    createdAt: row.createdAt,
   };
 }
 
-/**
- * Generate a deterministic certificate hash from listing data.
- * Uses real SHA-256 hashing for verifiable authenticity proofs.
- */
-async function generateCertHash(listingId: number, itemName: string, timestamp: number): Promise<string> {
-  const data = new TextEncoder().encode(`${listingId}:${itemName}:${timestamp}:thevaultdfw`);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return "0x" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+function store(): TokenizationStore {
+  const db = getDb();
+  return {
+    async getListing(id) {
+      const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
+      if (!row) return null;
+      return {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        sellerId: row.sellerId,
+        price: row.price,
+      };
+    },
+    async getCertByListing(listingId) {
+      const [row] = await db
+        .select()
+        .from(blockchainCerts)
+        .where(and(eq(blockchainCerts.listingId, listingId), inArray(blockchainCerts.status, ["pending", "minted"])))
+        .orderBy(desc(blockchainCerts.id))
+        .limit(1);
+      return row ? toCert(row) : null;
+    },
+    async getCertByTx(txHash) {
+      const [row] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.blockHash, txHash.toLowerCase())).limit(1);
+      return row ? toCert(row) : null;
+    },
+    async getCertByToken(token) {
+      const [row] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.contractAddress, token)).limit(1);
+      return row ? toCert(row) : null;
+    },
+    async insertCert(row) {
+      const result = await db.insert(blockchainCerts).values(row);
+      const id = Number(result.meta.last_row_id);
+      const [created] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.id, id)).limit(1);
+      if (!created) throw new TokenizationError("PRECONDITION_FAILED", "Launch intent could not be stored.");
+      return toCert(created);
+    },
+    async updateCert(id, patch) {
+      await db.update(blockchainCerts).set({ ...patch, updatedAt: new Date() }).where(eq(blockchainCerts.id, id));
+    },
+    async markListingTokenized(listingId, certId, token) {
+      await db
+        .update(listings)
+        .set({ isCertified: true, tokenContractAddress: token, certificationId: certId })
+        .where(eq(listings.id, listingId));
+    },
+  };
 }
 
-/**
- * Create a verifiable authenticity signature using the cert keypair.
- */
-async function signCertificate(keypair: Keypair, certHash: string): Promise<string> {
-  const message = new TextEncoder().encode(`VAULT-CERT:${certHash}`);
-  const signature = await crypto.subtle.sign(
-    "Ed25519",
-    await crypto.subtle.importKey(
-      "raw",
-      keypair.secretKey.slice(0, 32),
-      { name: "Ed25519" },
-      false,
-      ["sign"]
-    ),
-    message
-  );
-  return Buffer.from(signature).toString("base64");
+function publicCert(row: typeof blockchainCerts.$inferSelect) {
+  return {
+    ...row,
+    verificationUrl: `https://thevaultdfw.win/listing/${row.listingId}`,
+  };
 }
 
 export const blockchainRouter = createRouter({
   certify: authedQuery
     .input(
       z.object({
-        listingId: z.number(),
+        listingId: z.number().int().positive(),
         itemName: z.string().min(1).max(500),
         itemDescription: z.string().max(5000).optional(),
-        walletAddress: z.string().min(32).max(44).regex(/^[1-9A-HJ-NP-Za-km-z]+$/),
-      })
+        walletAddress: z.string().regex(EVM_ADDRESS),
+      }),
     )
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sign in required." });
+      try {
+        const result = await runCertify(
+          { listingId: input.listingId, walletAddress: input.walletAddress },
+          { id: ctx.user.id, role: ctx.user.role },
+          store(),
+        );
+        logAudit({
+          ip: getClientIP(ctx.req),
+          method: "POST",
+          path: "blockchain.certify",
+          userId: ctx.user.id,
+          action: result.alreadyLaunched ? "tokenize_existing" : "tokenize_intent",
+          details: `listing:${input.listingId} cert:${result.certId} wallet:${input.walletAddress.slice(0, 8)}`,
+        });
+        return result;
+      } catch (error) {
+        const mapped = asTokenizationError(error);
+        if (mapped) throw mapped;
+        throw error;
+      }
+    }),
 
-      // Check existing cert
-      const [existing] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.listingId, input.listingId)).limit(1);
-      if (existing) return { success: false, error: "Item already certified", cert: existing };
+  confirmLaunch: authedQuery
+    .input(
+      z.object({
+        listingId: z.number().int().positive(),
+        txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sign in required." });
+      try {
+        const db = getDb();
+        const [listing] = await db.select().from(listings).where(eq(listings.id, input.listingId)).limit(1);
+        const result = await runConfirm(
+          input,
+          { id: ctx.user.id, role: ctx.user.role },
+          store(),
+          readLaunchTransaction,
+          async (token) => {
+            const erc20 = await readErc20(token);
+            return { name: erc20.name, symbol: erc20.symbol };
+          },
+        );
+        if (result.status === "minted" && listing && result.message.startsWith("Token launched")) {
+          autoTriggerFromAction(
+            "tokenize",
+            listing.title,
+            undefined,
+            listing.price ? Number(listing.price) : undefined,
+            listing.id,
+          );
+        }
+        logAudit({
+          ip: getClientIP(ctx.req),
+          method: "POST",
+          path: "blockchain.confirmLaunch",
+          userId: ctx.user.id,
+          action: "tokenize_confirmed",
+          details: `listing:${input.listingId} tx:${input.txHash.slice(0, 10)}`,
+        });
+        return result;
+      } catch (error) {
+        const mapped = asTokenizationError(error);
+        if (mapped) throw mapped;
+        throw error;
+      }
+    }),
 
-      // Verify listing exists
-      const [listing] = await db.select().from(listings).where(eq(listings.id, input.listingId)).limit(1);
-      if (!listing) throw new TRPCError({ code: "NOT_FOUND", message: "Listing not found" });
-
-      // Generate REAL keypair and certificate hash
-      const ts = Date.now();
-      const { publicKey: certPubkey, secretKey } = generateCertKeypair();
-      const certHash = await generateCertHash(input.listingId, input.itemName, ts);
-
-      // Generate deterministic token ID from pubkey
-      const tokenId = certPubkey.slice(0, 8);
-
-      // Use a deterministic block reference (listing id + timestamp)
-      const blockHash = "0x" + Array.from(
-        new Uint8Array(
-          await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${input.listingId}-${ts}-block`))
-        )
-      ).map((b) => b.toString(16).padStart(2, "0")).join("");
-
-      const blockNum = Math.floor(ts / 1000);
-
-      const result = await db.insert(blockchainCerts).values({
-        listingId: input.listingId,
-        userId: ctx.user?.id || null,
-        certificateHash: certHash,
-        contractAddress: certPubkey,  // Real Solana public key
-        tokenId,
-        blockHash,
-        blockNumber: blockNum,
-        network: "solana",
-        itemName: input.itemName,
-        itemDescription: input.itemDescription || null,
-        metadataUri: `https://thevaultdfw.win/certificate/${input.listingId}`,
-        status: "minted",
-        certificationFee: "0.005",
+  market: publicQuery
+    .input(
+      z
+        .object({
+          wallet: z.string().regex(EVM_ADDRESS).optional(),
+          solanaWallet: z.string().regex(SOL_ADDRESS).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      const limit = await checkRateLimit(ctx.req, {
+        windowMs: 60_000,
+        maxRequests: 20,
+        keyGenerator: (req) => `token-market:${getClientIP(req)}`,
       });
-
-      const certId = Number(result.meta.last_row_id);
-
-      // Update listing
-      await db.update(listings).set({
-        isCertified: true,
-        tokenContractAddress: certPubkey,
-        certificationId: certId,
-      }).where(eq(listings.id, input.listingId));
-
-      // Trigger autonomous verification and tokenization
-      autoTriggerFromAction("verify", input.itemName, undefined, listing.price ? Number(listing.price) : undefined, input.listingId);
-      autoTriggerFromAction("tokenize", input.itemName, undefined, listing.price ? Number(listing.price) : undefined, input.listingId);
-
-      logAudit({
-        ip: getClientIP(ctx.req),
-        method: "POST",
-        path: "blockchain.certify",
-        userId: ctx.user?.id,
-        action: "item_certified",
-        details: `listing:${input.listingId} cert:${certId} pubkey:${certPubkey.slice(0, 8)}...`,
-      });
-
-      return {
-        success: true,
-        cert: {
-          id: certId,
-          certificateHash: certHash,
-          contractAddress: certPubkey,
-          tokenId,
-          blockHash,
-          blockNumber: blockNum,
-          network: "solana",
-          status: "minted",
-          itemName: input.itemName,
-          metadataUri: `https://thevaultdfw.win/certificate/${input.listingId}`,
-        },
-        message: "Item certified with real Solana keypair. Certificate of authenticity generated.",
-        verification: {
-          publicKey: certPubkey,
-          canVerify: true,
-          instructions: "Certificate authenticity can be verified by signing a message with this public key on-chain.",
-        },
-      };
+      if (!limit.allowed) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Token quotes are rate limited. Try again in a minute." });
+      }
+      const vaultTokens: { address: string; symbol: string; name: string }[] = [];
+      try {
+        const db = getDb();
+        const rows = await db
+          .select()
+          .from(blockchainCerts)
+          .where(eq(blockchainCerts.status, "minted"))
+          .orderBy(desc(blockchainCerts.createdAt))
+          .limit(12);
+        for (const row of rows) {
+          if (row.contractAddress && EVM_ADDRESS.test(row.contractAddress)) {
+            vaultTokens.push({
+              address: row.contractAddress,
+              symbol: row.tokenId || "VAULT",
+              name: row.itemName,
+            });
+          }
+        }
+      } catch {
+        // Reference quotes still load when the certificate table is unavailable.
+      }
+      try {
+        return await quoteMarkets({
+          wallet: input?.wallet,
+          solanaWallet: input?.solanaWallet,
+          vaultTokens,
+        });
+      } catch {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Public RPC quotes are unavailable." });
+      }
     }),
 
-  getById: publicQuery
-    .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      const [c] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.id, input.id)).limit(1);
-      if (!c) return null;
-      return {
-        ...c,
-        network: "solana",
-        verificationUrl: `https://thevaultdfw.win/certificate/${c.listingId}`,
-      };
-    }),
+  getById: publicQuery.input(z.object({ id: z.number().int().positive() })).query(async ({ input }) => {
+    const db = getDb();
+    const [row] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.id, input.id)).limit(1);
+    return row ? publicCert(row) : null;
+  }),
 
-  getByListing: publicQuery
-    .input(z.object({ listingId: z.number() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      const [c] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.listingId, input.listingId)).limit(1);
-      if (!c) return null;
-      return {
-        ...c,
-        network: "solana",
-        verificationUrl: `https://thevaultdfw.win/certificate/${c.listingId}`,
-      };
-    }),
+  getByListing: publicQuery.input(z.object({ listingId: z.number().int().positive() })).query(async ({ input }) => {
+    const db = getDb();
+    const [row] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.listingId, input.listingId)).limit(1);
+    return row ? publicCert(row) : null;
+  }),
 
-  verify: publicQuery
-    .input(z.object({ certificateHash: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      const [c] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.certificateHash, input.certificateHash)).limit(1);
-      if (!c) return { valid: false, message: "Certificate not found in Vault records" };
-      return {
-        valid: c.status === "minted",
-        cert: {
-          id: c.id,
-          contractAddress: c.contractAddress,
-          tokenId: c.tokenId,
-          blockHash: c.blockHash,
-          blockNumber: c.blockNumber,
-          itemName: c.itemName,
-          status: c.status,
-        },
-        message: c.status === "minted"
-          ? "Certificate verified — real Solana public key on record"
-          : "Certificate pending or failed verification",
-        network: "solana",
-        verificationSteps: [
-          "1. Certificate hash is SHA-256 derived from listing data",
-          "2. Contract address is a real Ed25519 Solana public key",
-          "3. Full on-chain verification available via Solana explorer",
-        ],
-      };
-    }),
+  verify: publicQuery.input(z.object({ certificateHash: z.string().min(8).max(200) })).query(async ({ input }) => {
+    const db = getDb();
+    const [row] = await db.select().from(blockchainCerts).where(eq(blockchainCerts.certificateHash, input.certificateHash)).limit(1);
+    if (!row) return { valid: false, message: "Certificate not found in Vault records" };
+    const onBase = row.network === "base" && Boolean(row.contractAddress?.startsWith("0x"));
+    return {
+      valid: row.status === "minted" && onBase,
+      cert: {
+        id: row.id,
+        contractAddress: row.contractAddress,
+        tokenId: row.tokenId,
+        blockHash: row.blockHash,
+        blockNumber: row.blockNumber,
+        itemName: row.itemName,
+        status: row.status,
+      },
+      message:
+        row.status === "minted" && onBase
+          ? "Certificate verified against a confirmed Base transaction."
+          : "Certificate is not a confirmed Base token launch.",
+      network: row.network,
+      verificationSteps: onBase
+        ? [
+            "1. The seller signed a Clanker v5 createLaunch from their own wallet.",
+            "2. The transaction called the Base factory and included the intent nonce.",
+            "3. The receipt contains one Launched event and the token name matches the listing.",
+          ]
+        : ["This record predates wallet-signed Clanker launches and is not treated as an on-chain token."],
+    };
+  }),
 
   list: publicQuery.query(async () => {
     const db = getDb();
     return db
       .select()
       .from(blockchainCerts)
-      .where(eq(blockchainCerts.status, "minted"))
+      .where(inArray(blockchainCerts.status, ["minted", "pending"]))
       .orderBy(desc(blockchainCerts.createdAt))
       .limit(50);
   }),

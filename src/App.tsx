@@ -65,6 +65,7 @@ export default function App() {
             <Route path="/wallet-pay/:id" element={<WalletPay />} />
             <Route path="/certificate/:id" element={<Certificate />} />
             <Route path="/token-gallery" element={<TokenGallery />} />
+            <Route path="/tokens" element={<TokenGallery />} />
             <Route path="/support" element={<Support />} />
             <Route path="/proverify" element={<ProVerify />} />
             <Route path="/proverify/:id" element={<ProVerifyResult />} />

@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { LiabilityBanner, FooterDisclaimer } from '@/components/LiabilityDisclaimer'
+import { WalletConnectButton } from '@/components/WalletConnectButton'
 import {
   Diamond, Search, Menu, X, LogOut, User, Shield, Mail,
   Heart, ShoppingBag, HelpCircle,
@@ -138,6 +139,7 @@ export default function Layout() {
                   <Shield className="w-4 h-4" />
                 </Link>
               )}
+              <WalletConnectButton />
               {isAuthenticated ? (
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] tracking-[2px] text-[#C8BC98] uppercase hidden lg:block">{user?.name || 'Collector'}</span>
@@ -194,6 +196,7 @@ export default function Layout() {
                 </Link>
               </div>
               <div className="border-t border-[#C9A84C]/20 pt-4 mt-4">
+                <WalletConnectButton compact />
                 {isAuthenticated ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">

@@ -1,145 +1,208 @@
-import { Link } from 'react-router'
-import { trpc } from '@/providers/trpc'
-import {
-  Diamond, ShieldCheck, Loader2, ExternalLink, Gem, Coins,
-  Landmark, Palette, Watch, Trophy, BookOpen
-} from 'lucide-react'
+import { useState } from "react";
+import { Link } from "react-router";
+import { useAccount } from "wagmi";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { REFERENCE_TOKENS } from "@contracts/reference-tokens";
+import { trpc } from "@/providers/trpc";
+import { Coins, Diamond, Loader2, ShieldCheck } from "lucide-react";
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  'Fine Jewelry': <Gem className="w-8 h-8" />,
-  'Rare Coins': <Coins className="w-8 h-8" />,
-  'Luxury Watches': <Watch className="w-8 h-8" />,
-  'Fine Art': <Palette className="w-8 h-8" />,
-  'Antiques': <Landmark className="w-8 h-8" />,
-  'Sports Memorabilia': <Trophy className="w-8 h-8" />,
-  'Estate Jewelry': <Diamond className="w-8 h-8" />,
-  'Rare Books': <BookOpen className="w-8 h-8" />,
+function money(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1) return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return `$${value.toPrecision(3)}`;
+}
+
+function changeLabel(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
 }
 
 export default function TokenGallery() {
-  const { data: certs, isLoading } = trpc.blockchain.list.useQuery()
-  const { data: listingsData } = trpc.listings.certified.useQuery()
+  const { address } = useAccount();
+  const solana = useWallet();
+  const solanaAddress = solana.publicKey?.toBase58();
+  const { data: certs, isLoading } = trpc.blockchain.list.useQuery();
+  const { data: listingsData } = trpc.listings.certified.useQuery();
+  const market = trpc.blockchain.market.useQuery({
+    wallet: address,
+    solanaWallet: solanaAddress,
+  });
+  const quotes = market.data?.tokens ?? [];
+  const references = REFERENCE_TOKENS.map((token) => quotes.find((quote) => quote.address.toLowerCase() === token.address.toLowerCase()));
+  const vaultQuotes = quotes.filter((quote) => quote.kind === "vault");
+  const [selected, setSelected] = useState(0);
+  const selectedVault = vaultQuotes[selected] ?? vaultQuotes[0];
+  const columns = [selectedVault, ...references];
 
-  // Merge cert data with listing data
-  const mergedItems = (certs || []).map(cert => {
-    const listing = (listingsData || []).find(l => l.id === cert.listingId)
-    return { cert, listing }
-  }).filter(item => item.listing)
+  const mergedItems = (certs || [])
+    .map((cert) => ({ cert, listing: (listingsData || []).find((item) => item.id === cert.listingId) }))
+    .filter((item) => item.listing);
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-[#C9A84C]/25 mb-4">
-            <ShieldCheck className="w-3 h-3 text-[#C9A84C]" />
-            <span className="text-[8px] tracking-[4px] uppercase text-[#C9A84C] font-medium">On-Chain Certified</span>
+    <div className="min-h-screen px-4 pt-24 pb-16 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-12 text-center">
+          <div className="mb-4 inline-flex items-center gap-2 border border-[#C9A84C]/25 px-4 py-1.5">
+            <ShieldCheck className="h-3 w-3 text-[#C9A84C]" />
+            <span className="text-[8px] font-medium tracking-[4px] text-[#C9A84C] uppercase">Base · Clanker v5</span>
           </div>
-          <h1 className="font-cinzel text-2xl sm:text-3xl md:text-4xl font-bold text-[#F5EED8] tracking-[4px]">
-            Token Gallery
-          </h1>
-          <div className="flex items-center justify-center gap-3 mt-4 mb-4">
-            <div className="w-12 h-px bg-gradient-to-r from-transparent to-[#C9A84C]" />
-            <Diamond className="w-1.5 h-1.5 text-[#C9A84C] rotate-45" />
-            <div className="w-12 h-px bg-gradient-to-l from-transparent to-[#C9A84C]" />
+          <h1 className="font-cinzel text-2xl font-bold tracking-[4px] text-[#F5EED8] sm:text-3xl md:text-4xl">Tokens</h1>
+          <div className="mt-4 mb-4 flex items-center justify-center gap-3">
+            <div className="h-px w-12 bg-gradient-to-r from-transparent to-[#C9A84C]" />
+            <Diamond className="h-1.5 w-1.5 rotate-45 text-[#C9A84C]" />
+            <div className="h-px w-12 bg-gradient-to-l from-transparent to-[#C9A84C]" />
           </div>
-          <p className="font-cormorant italic text-base text-[#C8BC98] max-w-xl mx-auto">
-            Every item in this gallery has been certified on the Ethereum blockchain.
-            Each carries a unique smart contract, token ID, and an immutable block hash.
+          <p className="mx-auto max-w-xl font-cormorant text-base text-[#C8BC98] italic">
+            Vault launches sit beside {REFERENCE_TOKENS.map((token) => token.symbol).join(" and ")}. Prices are read from public Base DEX pools.
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-12 max-w-lg mx-auto">
-          <div className="p-5 bg-[#161616] border border-[#C9A84C]/15 text-center">
-            <div className="font-cinzel text-2xl font-bold text-[#C9A84C] mb-1">{certs?.length || 0}</div>
-            <div className="text-[8px] tracking-[2px] uppercase text-[#8A6E2F]">Certified Items</div>
+        <div className="mb-10 border border-[#C9A84C]/15 bg-[#161616] p-5">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-cinzel text-[10px] tracking-[3px] text-[#C9A84C] uppercase">Side by side</p>
+              <p className="mt-1 text-[10px] text-[#8A6E2F]">FDV is price times total supply. 24h is spot versus the Uniswap v3 24-hour average tick.</p>
+            </div>
+            {address ? (
+              <p className="font-mono text-[10px] text-[#C8BC98]">{address.slice(0, 6)}…{address.slice(-4)}</p>
+            ) : (
+              <p className="text-[10px] text-[#8A6E2F]">Connect a wallet in the toolbar to see holdings.</p>
+            )}
           </div>
-          <div className="p-5 bg-[#161616] border border-[#C9A84C]/15 text-center">
-            <div className="font-cinzel text-2xl font-bold text-emerald-400 mb-1">100%</div>
-            <div className="text-[8px] tracking-[2px] uppercase text-[#8A6E2F]">Verified</div>
-          </div>
-          <div className="p-5 bg-[#161616] border border-[#C9A84C]/15 text-center">
-            <div className="font-cinzel text-2xl font-bold text-[#FFD97A] mb-1">Sepolia</div>
-            <div className="text-[8px] tracking-[2px] uppercase text-[#8A6E2F]">Network</div>
-          </div>
+          {vaultQuotes.length > 1 && (
+            <label className="mb-4 block text-[10px] tracking-[2px] text-[#8A6E2F] uppercase">
+              Your token
+              <select
+                value={selected}
+                onChange={(event) => setSelected(Number(event.target.value))}
+                className="mt-2 block w-full border border-[#C9A84C]/20 bg-[#1E1E1E] px-3 py-2 font-cinzel text-xs text-[#F5EED8] outline-none"
+              >
+                {vaultQuotes.map((quote, index) => (
+                  <option key={quote.address} value={index}>
+                    {quote.symbol} · {quote.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {market.isLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-[#C9A84C]" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left">
+                <thead>
+                  <tr className="border-b border-[#C9A84C]/15 text-[8px] tracking-[2px] text-[#8A6E2F] uppercase">
+                    <th className="py-3 pr-4 font-normal">Metric</th>
+                    <th className="py-3 pr-4 font-normal">Your token</th>
+                    {REFERENCE_TOKENS.map((token) => (
+                      <th key={token.address} className="py-3 pr-4 font-normal">
+                        {token.symbol}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="text-sm text-[#F5EED8]">
+                  {(
+                    [
+                      ["Price", (quote: (typeof columns)[number]) => money(quote?.priceUsd)],
+                      ["FDV", (quote: (typeof columns)[number]) => money(quote?.fdvUsd)],
+                      ["Liquidity", (quote: (typeof columns)[number]) => money(quote?.liquidityUsd)],
+                      ["24h", (quote: (typeof columns)[number]) => changeLabel(quote?.change24hPct)],
+                      ["Your balance", (quote: (typeof columns)[number]) => quote?.holding ?? "—"],
+                    ] as const
+                  ).map(([label, render]) => (
+                    <tr key={label} className="border-b border-[#C9A84C]/10">
+                      <td className="py-3 pr-4 text-[10px] tracking-[2px] text-[#8A6E2F] uppercase">{label}</td>
+                      {columns.map((quote, index) => (
+                        <td key={`${label}-${index}`} className="py-3 pr-4 font-cinzel text-[#C9A84C]">
+                          {quote ? render(quote) : "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {market.data?.ethPriceUsd != null && (
+            <p className="mt-3 text-[10px] text-[#8A6E2F]">ETH from the WETH/USDC pool: {money(market.data.ethPriceUsd)}. {market.data.numeraire}.</p>
+          )}
+          {market.data?.solana && (
+            <p className="mt-1 text-[10px] text-[#C8BC98]">Solana wallet {market.data.solana.address.slice(0, 4)}…{market.data.solana.address.slice(-4)} holds {market.data.solana.sol} SOL.</p>
+          )}
+          {market.error && (
+            <p className="mt-3 text-[11px] text-[#C8BC98]">Quotes are unavailable until the public RPC route answers. The table stays in place.</p>
+          )}
+          {market.data?.notes.map((note) => (
+            <p key={note} className="mt-1 text-[10px] text-[#8A6E2F]">{note}</p>
+          ))}
         </div>
 
-        {/* Token Grid */}
+        <div className="mb-8 flex items-center justify-between">
+          <h2 className="font-cinzel text-sm tracking-[3px] text-[#F5EED8] uppercase">Vault launches</h2>
+          <Link to="/sell" className="font-cinzel text-[10px] tracking-[2px] text-[#C9A84C] uppercase">
+            Launch an item
+          </Link>
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-20">
-            <Loader2 className="w-8 h-8 text-[#C9A84C] animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#C9A84C]" />
           </div>
         ) : mergedItems.length === 0 ? (
-          <div className="text-center py-20 border border-[#C9A84C]/15 bg-[#161616]">
-            <Diamond className="w-12 h-12 text-[#C9A84C]/20 mx-auto mb-4" />
-            <p className="font-cinzel text-sm text-[#C8BC98] tracking-[2px] uppercase mb-2">No Certified Items Yet</p>
-            <p className="text-xs text-[#8A6E2F] mb-4">Be the first to certify and tokenize your collection</p>
-            <Link to="/sell" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[10px] tracking-[3px] uppercase font-bold">
-              List & Certify an Item
+          <div className="border border-[#C9A84C]/15 bg-[#161616] py-20 text-center">
+            <Coins className="mx-auto mb-4 h-12 w-12 text-[#C9A84C]/20" />
+            <p className="mb-2 font-cinzel text-sm tracking-[2px] text-[#C8BC98] uppercase">No launched items yet</p>
+            <p className="mb-4 text-xs text-[#8A6E2F]">A connected seller signs the Clanker launch. The Vault never holds the key.</p>
+            <Link to="/sell" className="inline-flex items-center gap-2 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] px-6 py-3 font-cinzel text-[10px] font-bold tracking-[3px] text-[#080808] uppercase">
+              List and launch
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {mergedItems.map(({ cert, listing }) => (
-              <div key={cert.id} className="bg-[#161616] border border-[#C9A84C]/15 overflow-hidden hover:border-[#C9A84C] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(201,168,76,0.1)] transition-all duration-300">
-                {/* Token Image Area */}
-                <div className="h-40 bg-gradient-to-b from-[#1E1E1E] to-[#0F0F0F] flex items-center justify-center relative border-b border-[#C9A84C]/15">
-                  <div className="text-[#C9A84C]/30">
-                    {categoryIcons[listing?.category?.name || ''] || <Diamond className="w-14 h-14" />}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {mergedItems.map(({ cert, listing }) => {
+              const onBase = cert.network === "base" && Boolean(cert.contractAddress?.startsWith("0x"));
+              return (
+                <div key={cert.id} className="border border-[#C9A84C]/15 bg-[#161616] transition-all duration-300 hover:-translate-y-1 hover:border-[#C9A84C]">
+                  <div className="relative flex h-40 items-center justify-center border-b border-[#C9A84C]/15 bg-gradient-to-b from-[#1E1E1E] to-[#0F0F0F]">
+                    <Diamond className="h-14 w-14 text-[#C9A84C]/30" />
+                    <div className="absolute top-3 left-3 border border-[#C9A84C]/30 bg-[#080808]/80 px-2.5 py-1">
+                      <span className={`font-cinzel text-[7px] tracking-[2px] uppercase ${onBase ? "text-emerald-400" : "text-[#C9A84C]"}`}>
+                        {cert.status === "pending" ? "Awaiting signature" : onBase ? "Base" : "Legacy record"}
+                      </span>
+                    </div>
                   </div>
-                  {/* Token Badge */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 bg-[#080808]/80 border border-[#C9A84C]/30">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    <span className="text-[7px] tracking-[2px] uppercase text-emerald-400 font-cinzel font-semibold">On-Chain</span>
-                  </div>
-                  {/* Token ID Badge */}
-                  <div className="absolute top-3 right-3 px-2.5 py-1 bg-[#C9A84C]/10 border border-[#C9A84C]/25">
-                    <span className="text-[8px] tracking-[1px] text-[#C9A84C] font-mono">#{cert.tokenId}</span>
+                  <div className="p-5">
+                    <p className="mb-1 text-[8px] tracking-[3px] text-[#8A6E2F] uppercase">{listing?.category?.name}</p>
+                    <h3 className="mb-3 line-clamp-2 font-cinzel text-[11px] font-semibold tracking-[1px] text-[#F5EED8]">{listing?.title}</h3>
+                    <div className="mb-4 space-y-2 border border-[#C9A84C]/10 bg-[#1E1E1E] p-3 text-[10px]">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#8A6E2F]">Token</span>
+                        <span className="truncate font-mono text-[9px] text-[#C9A84C]">{cert.contractAddress || cert.tokenId}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#8A6E2F]">Network</span>
+                        <span className="text-[#C8BC98]">{cert.network}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-end justify-between border-t border-[#C9A84C]/10 pt-3">
+                      <span className="font-cinzel text-base font-bold text-[#C9A84C]">${Number(listing?.price || 0).toLocaleString("en-US")}</span>
+                      <Link to={`/certificate/${cert.id}`} className="font-cinzel text-[9px] tracking-[2px] text-[#C9A84C] uppercase">
+                        Certificate
+                      </Link>
+                    </div>
                   </div>
                 </div>
-
-                {/* Token Details */}
-                <div className="p-5">
-                  <p className="text-[8px] tracking-[3px] text-[#8A6E2F] uppercase mb-1">{listing?.category?.name}</p>
-                  <h3 className="font-cinzel text-[11px] font-semibold tracking-[1px] text-[#F5EED8] mb-3 leading-relaxed line-clamp-2">
-                    {listing?.title}
-                  </h3>
-
-                  {/* Blockchain Details */}
-                  <div className="space-y-2 mb-4 p-3 bg-[#1E1E1E] border border-[#C9A84C]/10">
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-[#8A6E2F]">Contract</span>
-                      <span className="text-[#C9A84C] font-mono text-[9px] truncate max-w-[120px]">{cert.contractAddress}</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-[#8A6E2F]">Block</span>
-                      <span className="text-[#C8BC98] font-mono">{Number(cert.blockNumber).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-[#8A6E2F]">Hash</span>
-                      <span className="text-[#C8BC98] font-mono text-[9px] truncate max-w-[120px]">{cert.certificateHash?.slice(0, 16)}...</span>
-                    </div>
-                  </div>
-
-                  {/* Price */}
-                  <div className="flex items-end justify-between pt-3 border-t border-[#C9A84C]/10">
-                    <span className="font-cinzel text-base font-bold text-[#C9A84C]">
-                      ${Number(listing?.price || 0).toLocaleString('en-US')}
-                    </span>
-                    <Link
-                      to={`/certificate/${cert.id}`}
-                      className="flex items-center gap-1 text-[9px] tracking-[2px] uppercase text-[#C9A84C] font-cinzel font-semibold hover:text-[#E8CB7A] transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" /> Certificate
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
