@@ -32,9 +32,11 @@ Reference tokens live in `contracts/reference-tokens.ts`. The defaults are AERO 
 
 The toolbar uses wagmi for EVM wallets and Solana wallet-adapter for Phantom, Solflare, and Backpack. MetaMask, Coinbase Wallet, Rainbow, and Phantom on EVM use injected connectors. WalletConnect is added only when a project id is present at build time.
 
-## Before production
+## Deploy
 
-This app is built for Cloudflare Pages (`wrangler.toml`), not Vercel. Set these where the Pages build runs, because `VITE_` values are inlined by Vite:
+A push to `main` runs `.github/workflows/deploy.yml`. That job uses Node 22, builds `dist`, and runs `wrangler pages deploy dist --project-name thevault-77h`. The live domain is a CNAME to that Pages project. There is no second deploy workflow and no Worker `main` entry. Pages Functions stay in `functions/`.
+
+This app is not deployed to Vercel. Set these where the Pages build runs, because `VITE_` values are inlined by Vite. In GitHub Actions they are read from repository secrets of the same name:
 
 - `VITE_WALLETCONNECT_PROJECT_ID` from https://cloud.reown.com if you want the WalletConnect QR option. Leave it empty to ship injected wallets only. Do not commit the id.
 - `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_STRIPE_PUBLISHABLE_KEY` for the existing sign-in and card checkout.

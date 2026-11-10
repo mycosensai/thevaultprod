@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "audit:env": "node -e \"const required=['CLERK_SECRET_KEY','STRIPE_SECRET_KEY']; const missing=required.filter(k=>!process.env[k]); if(missing.length){console.error('Missing env vars:',missing.join(',')); process.exit(1)} console.log('Environment audit passed')\"",
-    "audit:wrangler": "wrangler deploy --dry-run",
+    "audit:wrangler": "node scripts/check-pages-config.mjs",
     "audit:build": "npm run check && npm run lint && npm run build"
   },
   "dependencies": {
