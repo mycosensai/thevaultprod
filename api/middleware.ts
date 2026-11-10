@@ -47,3 +47,23 @@ function requireRole(role: string) {
 
 export const authedQuery = t.procedure.use(requireAuth);
 export const adminQuery = authedQuery.use(requireRole("admin"));
+
+/**
+ * Role-check helper for seller-owned resources: throws FORBIDDEN unless the
+ * caller is the resource's seller or an admin. Replaces ad-hoc
+ * `resource.sellerId !== ctx.user.id && ctx.user.role !== "admin"` checks
+ * scattered across routers (M4).
+ */
+export function assertSellerOrAdmin(
+  ctx: Pick<TrpcContext, "user">,
+  sellerId: string | number | null | undefined
+): void {
+  const user = ctx.user;
+  if (!user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: ErrorMessages.unauthenticated });
+  }
+  if (user.role === "admin") return;
+  if (sellerId == null || String(sellerId) !== String(user.id)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: ErrorMessages.insufficientRole });
+  }
+}

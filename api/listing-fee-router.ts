@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import { createRouter, authedQuery, adminQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery, assertSellerOrAdmin } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, listingFees } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -61,9 +61,7 @@ export const listingFeeRouter = createRouter({
         .limit(1);
 
       if (!listing) throw new Error("Listing not found");
-      if (listing.sellerId !== user.id && user.role !== "admin") {
-        throw new Error("You do not own this listing");
-      }
+      assertSellerOrAdmin({ user }, listing.sellerId);
 
       logAudit({
         ip: getClientIP(ctx.req),

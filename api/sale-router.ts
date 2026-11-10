@@ -11,7 +11,12 @@
  */
 
 import { z } from "zod";
-import { createRouter, authedQuery, adminQuery } from "./middleware";
+import {
+  createRouter,
+  authedQuery,
+  adminQuery,
+  assertSellerOrAdmin,
+} from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, saleTransactions, sellerPayouts } from "@db/schema";
 import { getCommissionRateFromTiers } from "./lib/commission";
@@ -73,9 +78,7 @@ export const saleRouter = createRouter({
         .limit(1);
 
       if (!listing) throw new Error("Listing not found");
-      if (listing.sellerId !== seller.id && seller.role !== "admin") {
-        throw new Error("You do not own this listing");
-      }
+      assertSellerOrAdmin({ user: seller }, listing.sellerId);
 
       const { rate, amount } = await calculateCommission(db, input.salePrice);
       const sellerPayout = input.salePrice - amount;
@@ -143,9 +146,7 @@ export const saleRouter = createRouter({
         .limit(1);
 
       if (!sale) throw new Error("Sale not found");
-      if (sale.sellerId !== ctx.user!.id && ctx.user!.role !== "admin") {
-        throw new Error("Unauthorized");
-      }
+      assertSellerOrAdmin(ctx, sale.sellerId);
 
       const [listing] = await db
         .select()
@@ -218,9 +219,7 @@ export const saleRouter = createRouter({
         .limit(1);
 
       if (!sale) throw new Error("Sale not found");
-      if (sale.sellerId !== ctx.user!.id && ctx.user!.role !== "admin") {
-        throw new Error("Unauthorized");
-      }
+      assertSellerOrAdmin(ctx, sale.sellerId);
 
       await db
         .update(saleTransactions)
@@ -259,9 +258,7 @@ export const saleRouter = createRouter({
         .limit(1);
 
       if (!sale) throw new Error("Sale not found");
-      if (sale.sellerId !== ctx.user!.id && ctx.user!.role !== "admin") {
-        throw new Error("Unauthorized");
-      }
+      assertSellerOrAdmin(ctx, sale.sellerId);
 
       await db
         .update(saleTransactions)
@@ -298,9 +295,7 @@ export const saleRouter = createRouter({
         .limit(1);
 
       if (!sale) throw new Error("Sale not found");
-      if (sale.sellerId !== ctx.user!.id && ctx.user!.role !== "admin") {
-        throw new Error("Unauthorized");
-      }
+      assertSellerOrAdmin(ctx, sale.sellerId);
 
       if (sale.status !== "delivered" && sale.status !== "shipped") {
         throw new Error("Item must be shipped or delivered before completing");

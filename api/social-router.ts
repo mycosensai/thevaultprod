@@ -6,7 +6,12 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
+import {
+  createRouter,
+  publicQuery,
+  authedQuery,
+  assertSellerOrAdmin,
+} from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   listings,
@@ -298,9 +303,7 @@ export const socialRouter = createRouter({
         .limit(1);
 
       if (!listing) throw new Error("Listing not found");
-      if (listing.sellerId !== user.id && user.role !== "admin") {
-        throw new Error("You do not own this listing");
-      }
+      assertSellerOrAdmin({ user }, listing.sellerId);
 
       // Check if already searched
       const existing = await db
