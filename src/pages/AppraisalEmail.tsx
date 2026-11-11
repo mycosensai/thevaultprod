@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams, Link } from 'react-router'
 import { trpc } from '@/providers/trpc'
+import { commissionBreakdown, commissionRateString } from '@/lib/commission-policy'
 import {
   Mail, ArrowLeft, Loader2, CheckCircle2, AlertTriangle,
   Diamond, Send, DollarSign
@@ -54,8 +55,11 @@ export default function AppraisalEmail() {
   }
 
   const ev = Number(appraisal.estimatedValue) || 0
-  const commissionRate = appraisal.commissionRate || '5.00'
-  const commissionEstimate = ev * (parseFloat(commissionRate) / 100)
+  const quote = commissionBreakdown(ev)
+  const commissionRate = appraisal.commissionRate || commissionRateString(ev)
+  const commissionEstimate = appraisal.commissionRate
+    ? ev * (parseFloat(commissionRate) / 100)
+    : quote.commission
 
   return (
     <div className="min-h-screen bg-[#080808] pt-24 pb-20 px-4">

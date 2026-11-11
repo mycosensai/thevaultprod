@@ -1,4 +1,5 @@
 import { Diamond } from 'lucide-react'
+import { COMMISSION_POLICY_SENTENCE, NO_EXTRA_FEES_SENTENCE } from '@/lib/commission-policy'
 
 export default function Terms() {
   return (
@@ -10,7 +11,7 @@ export default function Terms() {
           </div>
           <h1 className="font-cinzel text-3xl sm:text-4xl font-bold text-[#F5EED8] tracking-[6px] mb-4">TERMS OF SERVICE</h1>
           <div className="w-16 h-px bg-[#C9A84C] mx-auto mb-6" />
-          <p className="text-xs text-[#8A6E2F]">Last Updated: April 2026</p>
+          <p className="text-xs text-[#8A6E2F]">Last Updated: November 2026</p>
         </div>
 
         <div className="bg-[#161616] border border-[#C9A84C]/20 p-8 sm:p-12 space-y-8 text-sm text-[#C8BC98] leading-relaxed relative">
@@ -22,7 +23,7 @@ export default function Terms() {
             { title: '2. Eligibility', text: 'You must be at least 18 years old to use The Vault. By using the platform, you represent and warrant that you have the legal capacity to enter into binding contracts. Users under 18 may only use the platform under the supervision of a parent or legal guardian.' },
             { title: '3. Account Registration', text: 'You are responsible for maintaining the confidentiality of your account credentials. You agree to provide accurate and complete information when creating an account. The Vault is not liable for any loss or damage arising from your failure to safeguard your account information.' },
             { title: '4. Buying and Selling', text: 'All transactions on The Vault are conducted directly between buyers and sellers. The Vault serves as a platform facilitator only. We never hold buyer funds. Sellers are responsible for accurately describing items, including condition, provenance, and authenticity. Buyers are responsible for reviewing all item details before purchase.' },
-            { title: '5. Fees and Commissions', text: 'The Vault charges commission fees based on the final sale price: 5% for items under $1,000, 7% for items between $1,000 and $7,500, 10% for items between $7,500 and $10,000, and 5% for items over $10,000. These fees are collected automatically at the time of transaction through our payment processors.' },
+            { title: '5. Fees and Commissions', text: `${COMMISSION_POLICY_SENTENCE} ${NO_EXTRA_FEES_SENTENCE} Commission is collected at the time of sale through our payment processors.` },
             { title: '6. Prohibited Items', text: 'The following may not be listed on The Vault: stolen property, counterfeit items presented as authentic, illegal goods, items that violate intellectual property rights, hazardous materials, live animals, weapons, and any items prohibited by applicable law. We reserve the right to remove any listing without notice.' },
             { title: '7. Authenticity and Provenance', text: 'While The Vault offers AI-powered appraisals and ProVerify expert verification, these services provide professional opinions, not guarantees. The Vault is not responsible for disputes regarding authenticity. Buyers and sellers should conduct their own due diligence. Blockchain certificates are provided as records of verification, not as legal warranties.' },
             { title: '8. Zero Funds Held Policy', text: 'The Vault never holds, custodies, or manages user funds. All payments are processed directly between buyers and sellers through Stripe, Coinbase Commerce, or Solana blockchain transfers. The Vault is not a money services business, escrow service, or financial institution.' },

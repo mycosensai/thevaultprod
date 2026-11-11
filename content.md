@@ -13,7 +13,7 @@ The Vault is an online platform designed to connect collectors and buyers throug
 
 ### Selling Items
 - Step-by-step process for sellers: uploading photos and descriptions, receiving AI pricing estimates, creating listings, and closing sales.
-- Pricing structure based on item value: 5%, 7%, 10%, 15% commissions.
+- Pricing structure based on item value: 5% under $1,000, 7% from $1,000 to $10,000, and 5% over $10,000. No listing fee, no monthly fees, and no hidden charges.
 - Commission calculator tool for estimating seller proceeds.
 
 ### Buying Items
