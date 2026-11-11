@@ -169,7 +169,7 @@ const XSS_PATTERNS = [
 ];
 
 export function sanitizeInput(input: string): string {
-  const truncated = input.slice(0, 5000);
+  const truncated = input.replace(/\u0000/g, "").slice(0, 5000);
 
   let sanitized = truncated;
 
@@ -376,7 +376,7 @@ export async function revokeAllUserSessions(userId: number, d1?: D1Like): Promis
 
 async function dbUpsertRevocation(d1: D1Like, userId: number): Promise<void> {
   const now = Date.now();
-  await db
+  await d1
     .prepare(
       "INSERT INTO user_session_revocations (user_id, revoked_at) VALUES (?, ?) " +
         "ON CONFLICT(user_id) DO UPDATE SET revoked_at = ?"
@@ -417,6 +417,19 @@ export async function isUserSessionRevoked(userId: number, tokenIssuedAt: number
   }
   const revokedAt = revokedUserSessions.get(userId);
   return revokedAt ? tokenIssuedAt < revokedAt : false;
+}
+
+/** Checkout return URLs must pass validateUrl and match this request or the Vault host. */
+export function isCheckoutRedirectAllowed(url: string, request: Request): boolean {
+  const requestHost = (request.headers.get("host") || "").split(":")[0].trim().toLowerCase();
+  const vaultHost = env.vaultDomain
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    .split(":")[0]
+    .trim()
+    .toLowerCase();
+  const allowed = [requestHost, vaultHost, "thevaultdfw.win", "www.thevaultdfw.win"].filter((host) => host.length > 0);
+  return validateUrl(url, allowed);
 }
 
 export function validateUrl(url: string, allowedHosts?: string[]): boolean {

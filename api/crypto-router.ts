@@ -417,16 +417,20 @@ export const cryptoRouter = createRouter({
       };
     }),
 
-  getStatus: publicQuery
+  getStatus: authedQuery
     .input(z.object({ paymentId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
       const [p] = await db
         .select()
         .from(cryptoPayments)
         .where(eq(cryptoPayments.id, input.paymentId))
         .limit(1);
-      return p || null;
+      if (!p) return null;
+      if (ctx.user.role !== "admin" && p.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not your payment" });
+      }
+      return p;
     }),
 
   getRates: publicQuery.query(() => {
@@ -449,17 +453,24 @@ export const cryptoRouter = createRouter({
     };
   }),
 
-  listByUser: publicQuery
+  listByUser: authedQuery
     .input(
       z.object({ address: z.string().optional() }).optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
-      if (!input?.address) return [];
+      if (ctx.user.role === "admin" && input?.address) {
+        return db
+          .select()
+          .from(cryptoPayments)
+          .where(eq(cryptoPayments.buyerAddress, input.address))
+          .orderBy(desc(cryptoPayments.createdAt))
+          .limit(50);
+      }
       return db
         .select()
         .from(cryptoPayments)
-        .where(eq(cryptoPayments.buyerAddress, input.address))
+        .where(eq(cryptoPayments.userId, ctx.user.id))
         .orderBy(desc(cryptoPayments.createdAt))
         .limit(50);
     }),

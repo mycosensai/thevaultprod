@@ -20,6 +20,7 @@ interface CloudflareEnv {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   NODE_ENV?: string;
+  ENVIRONMENT?: string;
   VAULT_DOMAIN?: string;
   RESEND_API_KEY?: string;
   // Web3 Treasury
@@ -33,26 +34,41 @@ interface CloudflareEnv {
 
 let cfEnv: Partial<CloudflareEnv> = {};
 
+function configuredString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Pages sets ENVIRONMENT=production in wrangler.toml. NODE_ENV is not a
+ * runtime binding unless someone adds it, so either flag means production.
+ */
+export function runtimeIsProduction(source: Partial<CloudflareEnv> = cfEnv): boolean {
+  return configuredString(source.NODE_ENV) === "production" || configuredString(source.ENVIRONMENT) === "production";
+}
+
 /** Development-only ephemeral secret; production must set APP_SECRET. */
 function devFallbackSecret(): string {
   return `dev-only-${globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)}${Date.now()}`;
 }
 
+export function resetCloudflareEnv(): void {
+  cfEnv = {};
+}
+
 export function setCloudflareEnv(env: Record<string, unknown>) {
-  cfEnv = { ...cfEnv, ...(env as any) };
-  const nodeEnv = typeof cfEnv.NODE_ENV === "string" ? cfEnv.NODE_ENV : "";
-  if (nodeEnv === "production" && !cfEnv.APP_SECRET) {
+  const next: Partial<CloudflareEnv> = { ...cfEnv, ...(env as Partial<CloudflareEnv>) };
+  if (runtimeIsProduction(next) && !next.APP_SECRET) {
     throw new Error(
       "APP_SECRET is not configured: refusing to start in production without a JWT signing secret"
     );
   }
+  cfEnv = next;
 }
 
 /** Fail-hard accessor: no hardcoded fallback secret exists. */
 export function assertAppSecretConfigured(): void {
   if (!cfEnv.APP_SECRET) {
-    const nodeEnv = typeof cfEnv.NODE_ENV === "string" ? cfEnv.NODE_ENV : "";
-    if (nodeEnv === "production") {
+    if (runtimeIsProduction()) {
       throw new Error("APP_SECRET is not configured: refusing to serve requests in production");
     }
     // Dev: seed an ephemeral random secret so nothing is hardcoded.
@@ -66,7 +82,7 @@ export const env = {
     assertAppSecretConfigured();
     return cfEnv.APP_SECRET as string;
   },
-  get isProduction(): boolean { return cfEnv.NODE_ENV === "production"; },
+  get isProduction(): boolean { return runtimeIsProduction(); },
   get databaseUrl(): string { return cfEnv.DATABASE_URL || ""; },
   get kimiAuthUrl(): string { return cfEnv.KIMI_AUTH_URL || ""; },
   get kimiOpenUrl(): string { return cfEnv.KIMI_OPEN_URL || ""; },

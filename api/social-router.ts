@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   listings,
@@ -477,7 +477,7 @@ export const socialRouter = createRouter({
       return { success: true };
     }),
 
-  stats: publicQuery.query(async () => {
+  stats: adminQuery.query(async () => {
     const db = getDb();
     const searches = await db.select().from(socialMediaSearches);
     const mentions = await db.select().from(socialMediaMentions);

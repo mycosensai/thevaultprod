@@ -4,7 +4,8 @@
  * Tests: SQL injection, XSS, CSRF, auth bypass, rate limiting, data exposure
  */
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { resetCloudflareEnv, setCloudflareEnv } from "./lib/env";
 import { sanitizeInput, sanitizeObject, sanitizeForPrompt, checkRateLimit, validatePasswordStrength, validateUrl, isTokenRevoked, getSecurityHeaders } from "./security";
 
 // ─── XSS / INJECTION TESTS ───
@@ -97,10 +98,16 @@ describe("Password Strength Validation", () => {
 
 // ─── URL VALIDATION TESTS ───
 describe("URL Validation", () => {
+  afterEach(() => {
+    resetCloudflareEnv();
+  });
+
   it("rejects non-HTTPS in production", async () => {
+    setCloudflareEnv({ ENVIRONMENT: "production", APP_SECRET: "x".repeat(32) });
     expect(validateUrl("http://evil.com")).toBe(false);
   });
   it("rejects localhost in production", async () => {
+    setCloudflareEnv({ ENVIRONMENT: "production", APP_SECRET: "x".repeat(32) });
     expect(validateUrl("https://localhost:3000")).toBe(false);
   });
   it("rejects URLs with credentials", async () => {

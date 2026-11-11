@@ -5,12 +5,13 @@
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, listingFees } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
-import { logAudit, getClientIP } from "./security";
+import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
+import { TRPCError } from "@trpc/server";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -47,6 +48,9 @@ export const listingFeeRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      if (!isCheckoutRedirectAllowed(input.successUrl, ctx.req) || !isCheckoutRedirectAllowed(input.cancelUrl, ctx.req)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Checkout redirect URL is not allowed" });
+      }
       const db = getDb();
       const user = ctx.user!;
 
@@ -224,7 +228,7 @@ export const listingFeeRouter = createRouter({
   /**
    * Get listing fee stats (admin)
    */
-  stats: publicQuery.query(async () => {
+  stats: adminQuery.query(async () => {
     const db = getDb();
     const fees = await db.select().from(listingFees);
 

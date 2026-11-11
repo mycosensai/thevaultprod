@@ -64,20 +64,20 @@ describe("APPRAISAL SYSTEM — Anti-Hallucination Verification", () => {
     expect(APPRAISER_PROMPT_SNIPPETS[5]).toContain("0.2");
   });
   it("has fallback parser for malformed responses", () => {
-    expect(APPRAISER_PROMPT_SNIPPETS[6]).toContain("valueMatch");
+    expect(APPRAISER_PROMPT_SNIPPETS[7]).toContain("valueMatch");
   });
   it("includes AI disclaimer", () => {
-    expect(APPRAISER_PROMPT_SNIPPETS[7]).toContain("informational purposes only");
+    expect(APPRAISER_PROMPT_SNIPPETS[8]).toContain("informational purposes only");
   });
   it("validates inputs via Zod", () => {
-    expect(APPRAISER_PROMPT_SNIPPETS[8]).toContain("z.string()");
+    expect(APPRAISER_PROMPT_SNIPPETS[9]).toContain("z.string()");
   });
   it("has status lifecycle", () => {
-    expect(APPRAISER_PROMPT_SNIPPETS[10]).toContain("pending");
-    expect(APPRAISER_PROMPT_SNIPPETS[11]).toContain("completed");
+    expect(APPRAISER_PROMPT_SNIPPETS[12]).toContain("pending");
+    expect(APPRAISER_PROMPT_SNIPPETS[13]).toContain("completed");
   });
   it("returns 0 when insufficient data", () => {
-    expect(APPRAISER_PROMPT_SNIPPETS[13]).toContain("0");
+    expect(APPRAISER_PROMPT_SNIPPETS[15]).toContain("set estimatedValue to 0");
   });
 });
 

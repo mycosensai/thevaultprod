@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * timer, or generates random values. Pages evaluates this graph while
  * publishing the Function, before request bindings exist.
  */
-const entrypoints = ["./router.ts", "./context.ts"] as const;
+const entrypoints = [
+  "./router.ts",
+  "./context.ts",
+  "../functions/[[path]].ts",
+  "../functions/api/db/health.ts",
+] as const;
 
 async function importFunctionGraph(): Promise<void> {
   for (const entry of entrypoints) {

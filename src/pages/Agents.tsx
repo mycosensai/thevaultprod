@@ -3,9 +3,9 @@
  * GeneralStaff-inspired warm cream / ink / rust palette
  */
 
-import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { Bot, Play, Pause, CheckCircle, XCircle, Clock, TrendingUp, Activity, Shield, MessageSquare, Zap, BarChart3, Globe, FileText, Users, Search, DollarSign, Lock } from "lucide-react";
 
 const AGENT_ICONS: Record<string, React.ReactNode> = {
@@ -33,16 +33,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function Agents() {
-  const [isAdmin] = useState(() => {
-    if (typeof window === 'undefined') return false
-    const role = localStorage.getItem('user_role')
-    return role === 'admin' || role === 'owner'
-  })
+  const { isAdmin } = useAuth();
   const utils = trpc.useContext();
 
-  const { data: stats } = trpc.agent.dashboardStats.useQuery();
-  const { data: fleet } = trpc.agent.fleetOverview.useQuery();
-  const { data: sessions } = trpc.agent.listSessions.useQuery({ limit: 10 });
+  const { data: stats } = trpc.agent.dashboardStats.useQuery(undefined, { enabled: isAdmin });
+  const { data: fleet } = trpc.agent.fleetOverview.useQuery(undefined, { enabled: isAdmin });
+  const { data: sessions } = trpc.agent.listSessions.useQuery({ limit: 10 }, { enabled: isAdmin });
   const seedProjects = trpc.agent.seedProjects.useMutation({
     onSuccess: () => { utils.agent.dashboardStats.invalidate(); utils.agent.fleetOverview.invalidate(); }
   });
@@ -52,11 +48,6 @@ export default function Agents() {
   const runSession = trpc.agent.runSession.useMutation({
     onSuccess: () => { utils.agent.listSessions.invalidate(); utils.agent.fleetOverview.invalidate(); utils.agent.dashboardStats.invalidate(); }
   });
-
-  useEffect(() => {
-    const role = localStorage.getItem("user_role");
-    setIsAdmin(role === "admin" || role === "owner");
-  }, []);
 
   const recentLogs = sessions?.slice(0, 5) ?? [];
 

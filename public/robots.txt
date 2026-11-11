@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /agents
+Disallow: /api/
+Disallow: /sale
+Disallow: /orders
+Disallow: /checkout
+Disallow: /crypto-checkout
+Disallow: /wallet-pay
+Disallow: /leads
+Disallow: /social-leads
+
+Sitemap: https://thevaultdfw.win/sitemap.xml
