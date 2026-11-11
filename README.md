@@ -41,7 +41,7 @@ Vite only inlines `VITE_` variables by itself. `vite.config.ts` also reads `WALL
 
 The value has to be a Reown project id: 32 hex characters, or a UUID. Other values are ignored and are not copied into the bundle. Do not commit the id.
 
-If that id was not present for `vite build`, the app requests `GET /api/wallet-connect-config` before rendering. The Pages Function reads the same names from the runtime environment of the project that is serving the site and returns only a valid project id. GitHub Actions builds `dist` and then uploads it, so a Pages secret is not visible to that Vite build unless the repository secret of the same name is set. The Function still sees the Pages runtime variable after the upload.
+If that id was not present for `vite build`, the storefront still renders immediately and then requests `GET /api/wallet-connect-config` in the background. The Pages Function reads the same names from the runtime environment of the project that is serving the site and returns only a valid project id. WalletConnect is added when that response arrives. GitHub Actions builds `dist` and then uploads it, so a Pages secret is not visible to that Vite build unless the repository secret of the same name is set. The Function still sees the Pages runtime variable after the upload.
 
 ## Deploy
 

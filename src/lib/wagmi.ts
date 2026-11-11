@@ -22,7 +22,7 @@ function createConnector(id: EvmConnectorId, projectId: string) {
     case "metaMask":
       return metaMask();
     case "coinbaseWallet":
-      return coinbaseWallet({ appName: metadata.name, preference: "all" });
+      return coinbaseWallet({ appName: metadata.name });
     case "rainbow":
       return injected({ target: "rainbow" });
     case "phantom":
@@ -66,6 +66,10 @@ type VaultWagmiConfig = ReturnType<typeof createVaultWagmiConfig>;
 
 let wagmiConfig: VaultWagmiConfig | null = null;
 
+function hasWalletConnectConnector(config: VaultWagmiConfig): boolean {
+  return config.connectors.some((connector) => `${connector.id} ${connector.name}`.toLowerCase().includes("walletconnect"));
+}
+
 export function initWagmiConfig(projectId: string): VaultWagmiConfig {
   if (wagmiConfig) return wagmiConfig;
   wagmiConfig = createVaultWagmiConfig(normalizeWalletConnectProjectId(projectId));
@@ -74,4 +78,12 @@ export function initWagmiConfig(projectId: string): VaultWagmiConfig {
 
 export function getWagmiConfig(): VaultWagmiConfig {
   return wagmiConfig ?? initWagmiConfig(readBuildTimeWalletConnectProjectId());
+}
+
+export function upgradeWagmiConfig(projectId: string): VaultWagmiConfig {
+  const current = getWagmiConfig();
+  const normalized = normalizeWalletConnectProjectId(projectId);
+  if (!normalized || hasWalletConnectConnector(current)) return current;
+  wagmiConfig = createVaultWagmiConfig(normalized);
+  return wagmiConfig;
 }

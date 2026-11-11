@@ -2,8 +2,6 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
-import { resolveWalletConnectProjectId } from '@/lib/resolve-wallet-connect-project-id'
-import { initWagmiConfig } from '@/lib/wagmi'
 import { TRPCProvider } from '@/providers/trpc'
 import { VaultWalletProvider } from '@/providers/VaultWalletProvider'
 import App from './App.tsx'
@@ -40,11 +38,6 @@ const app = (
   </BrowserRouter>
 )
 
-void resolveWalletConnectProjectId()
-  .catch(() => "")
-  .then((projectId) => {
-    initWagmiConfig(projectId)
-    createRoot(document.getElementById('root')!).render(
-      clerkPubKey ? <ClerkProvider publishableKey={clerkPubKey}>{app}</ClerkProvider> : app,
-    )
-  })
+createRoot(document.getElementById('root')!).render(
+  clerkPubKey ? <ClerkProvider publishableKey={clerkPubKey}>{app}</ClerkProvider> : app,
+)

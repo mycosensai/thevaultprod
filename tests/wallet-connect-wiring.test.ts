@@ -24,6 +24,15 @@ describe("WalletConnect build wiring", () => {
     expect(pkg.dependencies["@metamask/connect-evm"]).toBeTruthy();
   });
 
+  it("renders the storefront before the runtime project id lookup", () => {
+    const main = source("src/main.tsx");
+    const provider = source("src/providers/VaultWalletProvider.tsx");
+    expect(main).not.toContain("resolveWalletConnectProjectId");
+    expect(main).toContain("createRoot");
+    expect(provider).toContain("resolveWalletConnectProjectId");
+    expect(provider).toContain("upgradeWagmiConfig");
+  });
+
   it("builds the WalletConnect connector from the shared plan", () => {
     const wagmi = source("src/lib/wagmi.ts");
     expect(wagmi).toContain("evmConnectorPlan");
