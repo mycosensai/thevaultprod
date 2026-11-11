@@ -10,6 +10,7 @@ const entrypoints = [
   "./context.ts",
   "../functions/[[path]].ts",
   "../functions/api/db/health.ts",
+  "../functions/api/wallet-connect-config.ts",
 ] as const;
 
 async function importFunctionGraph(): Promise<void> {

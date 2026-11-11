@@ -5,7 +5,7 @@ import { ConnectionProvider, useWallet, WalletProvider } from "@solana/wallet-ad
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { useEffect, type ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
-import { wagmiConfig } from "@/lib/wagmi";
+import { getWagmiConfig } from "@/lib/wagmi";
 
 const solanaWallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter(), new BackpackWalletAdapter()];
 
@@ -19,6 +19,7 @@ function SolanaSelectionConnect({ children }: { children: ReactNode }) {
 }
 
 export function VaultWalletProvider({ children }: { children: ReactNode }) {
+  const wagmiConfig = getWagmiConfig();
   return (
     <WagmiProvider config={wagmiConfig} reconnectOnMount>
       <ConnectionProvider endpoint={SOLANA_RPC_URLS[0]}>
