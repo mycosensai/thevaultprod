@@ -63,13 +63,6 @@ export const listingFeeRouter = createRouter({
         throw new Error("You do not own this listing");
       }
 
-      if (listing.status !== "active") {
-        await db
-          .update(listings)
-          .set({ status: "active" })
-          .where(eq(listings.id, input.listingId));
-      }
-
       logAudit({
         ip: getClientIP(ctx.req),
         method: "POST",
@@ -84,7 +77,7 @@ export const listingFeeRouter = createRouter({
         alreadyPaid: true,
         url: null,
         amount: "0.00",
-        message: "The Vault does not charge a listing fee. Your listing is live. Commission is collected only when the item sells.",
+        message: "The Vault does not charge a listing fee. Commission is collected only when the item sells.",
       };
     }),
 

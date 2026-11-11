@@ -7,21 +7,14 @@ import {
   formatUsd,
 } from "../src/lib/commission-policy";
 
-function emptyTierDb() {
-  const chain: {
-    select: () => typeof chain
-    from: () => typeof chain
-    where: () => typeof chain
-    orderBy: () => typeof chain
-    limit: () => Promise<never[]>
-  } = {
-    select: () => chain,
-    from: () => chain,
-    where: () => chain,
-    orderBy: () => chain,
-    limit: async () => [],
+function tierDb(rows: Array<{ minAmount: string; maxAmount: string | null; rate: string }>) {
+  return {
+    select: () => ({
+      from: () => ({
+        where: async () => rows,
+      }),
+    }),
   };
-  return chain;
 }
 
 describe("published commission policy", () => {
@@ -57,10 +50,25 @@ describe("published commission policy", () => {
   });
 
   it("uses the published brackets when commission tier rows are missing", async () => {
-    const db = emptyTierDb();
+    const db = tierDb([]);
     await expect(getCommissionRateFromTiers(db, 500)).resolves.toBe("5.00");
     await expect(getCommissionRateFromTiers(db, 1000)).resolves.toBe("7.00");
     await expect(getCommissionRateFromTiers(db, 10000)).resolves.toBe("7.00");
     await expect(getCommissionRateFromTiers(db, 10000.01)).resolves.toBe("5.00");
+  });
+
+  it("matches stored tier thresholds as numbers", async () => {
+    const db = tierDb([
+      { minAmount: "1000", maxAmount: "10000", rate: "7.00" },
+      { minAmount: "10000.01", maxAmount: null, rate: "5.00" },
+    ]);
+    await expect(getCommissionRateFromTiers(db, 5000)).resolves.toBe("7.00");
+    await expect(getCommissionRateFromTiers(db, 10000)).resolves.toBe("7.00");
+    await expect(getCommissionRateFromTiers(db, 10000.01)).resolves.toBe("5.00");
+  });
+
+  it("does not apply a $10,000 open tier to a $5,000 sale", async () => {
+    const db = tierDb([{ minAmount: "10000", maxAmount: null, rate: "5.00" }]);
+    await expect(getCommissionRateFromTiers(db, 5000)).resolves.toBe("7.00");
   });
 });
