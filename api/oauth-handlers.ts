@@ -20,7 +20,11 @@ import { env } from "./lib/env";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { logAudit, getClientIP } from "./security";
 
-const JWT_SECRET = new TextEncoder().encode(env.appSecret);
+// Read during a request. Module init runs before Pages bindings exist, and
+// env.appSecret would generate a random dev fallback, which Workers reject.
+function getJwtSecret(): Uint8Array {
+  return new TextEncoder().encode(env.appSecret);
+}
 
 async function createOAuthSessionToken(payload: {
   userId: number;
@@ -30,7 +34,7 @@ async function createOAuthSessionToken(payload: {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function handleOAuthCallback(c: Context, provider: OAuthProvider) {
@@ -193,7 +197,7 @@ export async function verifyOAuthSession(
   if (!token) return null;
 
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
+    const { payload } = await jose.jwtVerify(token, getJwtSecret(), {
       clockTolerance: 60,
     });
     const userId = payload.userId as number;
