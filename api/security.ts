@@ -169,7 +169,7 @@ const XSS_PATTERNS = [
 ];
 
 export function sanitizeInput(input: string): string {
-  const truncated = input.slice(0, 5000);
+  const truncated = input.replace(/\u0000/g, "").slice(0, 5000);
 
   let sanitized = truncated;
 
@@ -376,7 +376,7 @@ export async function revokeAllUserSessions(userId: number, d1?: D1Like): Promis
 
 async function dbUpsertRevocation(d1: D1Like, userId: number): Promise<void> {
   const now = Date.now();
-  await db
+  await d1
     .prepare(
       "INSERT INTO user_session_revocations (user_id, revoked_at) VALUES (?, ?) " +
         "ON CONFLICT(user_id) DO UPDATE SET revoked_at = ?"

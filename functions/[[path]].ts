@@ -16,6 +16,8 @@ import { appRouter } from "../api/router";
 import { createContext } from "../api/context";
 import { setDb } from "../api/queries/connection";
 import { setCloudflareEnv, assertAppSecretConfigured } from "../api/lib/env";
+import { handleOAuthCallback } from "../api/oauth-handlers";
+import type { OAuthProvider } from "../api/oauth-providers";
 import { checkRateLimit, getSecurityHeaders, getCorsConfig } from "../api/security";
 
 type Env = Record<string, unknown> & {
@@ -165,6 +167,7 @@ app.use("/api/*", async (c, next) => {
 
   const isAuth =
     c.req.path.includes("/api/auth/") ||
+    c.req.path.includes("/api/oauth/callback/") ||
     c.req.path.includes("localAuth.login") ||
     c.req.path.includes("localAuth.register") ||
     c.req.path.includes("oauth.initiate") ||
@@ -279,6 +282,24 @@ app.post("/api/stripe/webhook", async (c) => {
     .run();
 
   return c.json({ ok: true, eventId: event.id, type: event.type });
+});
+
+function parseOAuthProvider(value: string): OAuthProvider | null {
+  switch (value) {
+    case "google":
+    case "x":
+    case "github":
+      return value;
+    default:
+      return null;
+  }
+}
+
+// ─── OAuth provider redirect target ───
+app.get("/api/oauth/callback/:provider", async (c) => {
+  const provider = parseOAuthProvider(c.req.param("provider"));
+  if (!provider) return c.json({ ok: false, error: "Unknown OAuth provider" }, 400);
+  return handleOAuthCallback(c, provider);
 });
 
 // ─── Auth routes ───

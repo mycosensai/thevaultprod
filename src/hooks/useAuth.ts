@@ -66,9 +66,17 @@ export function useAuth() {
   const isAdmin = user?.role === "admin";
 
   const logout = useCallback(() => {
-    localStorage.removeItem("local_auth_token");
-    logoutMutation.mutate();
-    window.location.reload();
+    try {
+      sessionStorage.removeItem("local_auth_token");
+      localStorage.removeItem("local_auth_token");
+    } catch (err) {
+      console.error("Unable to clear auth token", err);
+    }
+    logoutMutation.mutate(undefined, {
+      onSettled: () => {
+        window.location.reload();
+      },
+    });
   }, [logoutMutation]);
 
   return useMemo(

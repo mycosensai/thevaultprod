@@ -24,7 +24,22 @@ interface ProviderConfig {
   };
 }
 
-const CALLBACK_BASE = `${env.isProduction ? "https" : "http"}://localhost:3000`;
+/**
+ * Resolved per request. VAULT_DOMAIN is a Pages var (thevaultdfw.win). A
+ * module-level constant would freeze localhost before bindings exist.
+ */
+export function oauthCallbackBase(): string {
+  const raw = env.vaultDomain.trim().replace(/\/+$/, "");
+  if (!raw) return "http://localhost:3000";
+  if (/^https?:\/\//i.test(raw)) {
+    const url = new URL(raw);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    return `${local ? "http" : "https"}://${url.host}`;
+  }
+  const host = raw.split("/")[0] || "localhost:3000";
+  const local = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  return `${local ? "http" : "https"}://${host}`;
+}
 
 export const PROVIDER_CONFIGS: Record<OAuthProvider, ProviderConfig> = {
   google: {
@@ -51,6 +66,7 @@ export const PROVIDER_CONFIGS: Record<OAuthProvider, ProviderConfig> = {
       id: data.data?.id,
       name: data.data?.name || "X User",
       email: null,
+      emailVerified: false,
       avatar: data.data?.profile_image_url || null,
     }),
   },
@@ -171,7 +187,7 @@ export async function buildAuthUrl(
     };
   }
 
-  const redirectUri = `${CALLBACK_BASE}/api/oauth/callback/${provider}`;
+  const redirectUri = `${oauthCallbackBase()}/api/oauth/callback/${provider}`;
   const { verifier, challenge } = await generatePKCE();
   const nonceBytes = new Uint8Array(16);
   crypto.getRandomValues(nonceBytes);
@@ -211,7 +227,7 @@ export async function exchangeCode(
   const config = PROVIDER_CONFIGS[provider];
   const clientId = getClientId(provider);
   const clientSecret = getClientSecret(provider);
-  const redirectUri = `${CALLBACK_BASE}/api/oauth/callback/${provider}`;
+  const redirectUri = `${oauthCallbackBase()}/api/oauth/callback/${provider}`;
 
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -249,6 +265,7 @@ export async function fetchProfile(
   id: string;
   name: string;
   email: string | null;
+  emailVerified: boolean;
   avatar: string | null;
 }> {
   const config = PROVIDER_CONFIGS[provider];
