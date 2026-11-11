@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useAccount } from 'wagmi'
 import { trpc } from '@/providers/trpc'
 import { useAuth } from '@/hooks/useAuth'
+import { COMMISSION_TIERS, NO_EXTRA_FEES_SENTENCE, commissionBreakdown, formatUsd } from '@/lib/commission-policy'
 import { launchVaultToken } from '@/lib/clanker-launch'
 import {
   Diamond, Plus, X, Loader2, Sparkles, CheckCircle2, ShieldCheck, Bitcoin
@@ -64,14 +65,6 @@ export default function Sell() {
     }
   }
 
-  const createFeeCheckout = trpc.listingFee.createCheckout.useMutation({
-    onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url
-      }
-    },
-  })
-
   const addFeature = () => {
     if (featureInput.trim() && !features.includes(featureInput.trim())) {
       setFeatures([...features, featureInput.trim()])
@@ -99,15 +92,8 @@ export default function Sell() {
     })
   }
 
-  // Preview commission
   const numPrice = parseFloat(price) || 0
-  let rate = 5
-  if (numPrice >= 10000) rate = 5
-  else if (numPrice >= 7500) rate = 10
-  else if (numPrice >= 1000) rate = 7
-  else rate = 5
-  const commission = numPrice * (rate / 100)
-  const youReceive = numPrice - commission
+  const { rate, commission, payout: youReceive } = commissionBreakdown(numPrice)
 
   if (submitted && createdListingId) {
     return (
@@ -119,18 +105,17 @@ export default function Sell() {
               <CheckCircle2 className="w-10 h-10 text-emerald-400" />
             </div>
             <h2 className="font-cinzel text-2xl font-bold text-[#C9A84C] tracking-[4px] mb-4">
-              Listing Saved!
+              Listing Live
             </h2>
             <p className="text-sm text-[#C8BC98] mb-6 font-light">
-              Your item "{title}" has been saved. To activate it on the exchange and unlock AI buyer discovery, pay the one-time listing fee.
+              Your item "{title}" is live on the exchange. {NO_EXTRA_FEES_SENTENCE} Commission of {rate}% applies only if it sells.
             </p>
           </div>
 
-          {/* What We Do - Clear Statement */}
           <div className="mb-6 p-4 border border-[#C9A84C]/20 bg-[#C9A84C]/5">
-            <p className="text-[10px] text-[#C9A84C] tracking-[2px] uppercase font-semibold mb-2">What happens after you pay:</p>
+            <p className="text-[10px] text-[#C9A84C] tracking-[2px] uppercase font-semibold mb-2">What happens next:</p>
             <ul className="space-y-1.5 text-[10px] text-[#C8BC98]">
-              <li className="flex items-start gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0 mt-0.5" />Your item goes live on the exchange</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0 mt-0.5" />Your item is live on the exchange</li>
               <li className="flex items-start gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0 mt-0.5" />AI scans X, Reddit, Instagram for buyers</li>
               <li className="flex items-start gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0 mt-0.5" />You receive an email with lead contacts</li>
               <li className="flex items-start gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0 mt-0.5" />You connect directly with interested buyers</li>
@@ -138,41 +123,26 @@ export default function Sell() {
             </ul>
           </div>
 
-          {/* $20 Fee Payment */}
           <div className="p-6 border border-[#C9A84C]/30 bg-[#161616] text-center">
-            <p className="text-[9px] text-[#8A6E2F] tracking-[3px] uppercase mb-3">One-Time Listing Fee</p>
-            <p className="font-cinzel text-3xl text-[#C9A84C] font-bold mb-1">$20.00</p>
-            <p className="text-[10px] text-[#8A6E2F] mb-6">Unlocks AI buyer search + exchange listing</p>
-
-            {isAuthenticated ? (
-              <button
-                onClick={() =>
-                  createFeeCheckout.mutate({
-                    listingId: createdListingId,
-                    successUrl: `${window.location.origin}/social-leads/${createdListingId}`,
-                    cancelUrl: `${window.location.origin}/sell`,
-                  })
-                }
-                disabled={createFeeCheckout.isPending}
-                className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[11px] tracking-[3px] uppercase font-bold hover:shadow-[0_0_40px_rgba(201,168,76,0.4)] transition-all disabled:opacity-50"
+            <p className="text-[9px] text-[#8A6E2F] tracking-[3px] uppercase mb-3">Listing Fee</p>
+            <p className="font-cinzel text-3xl text-[#C9A84C] font-bold mb-1">$0.00</p>
+            <p className="text-[10px] text-[#8A6E2F] mb-6">
+              You receive ${formatUsd(youReceive)} if it sells at this price, after the {rate}% commission.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Link
+                to={`/listing/${createdListingId}`}
+                className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[11px] tracking-[3px] uppercase font-bold hover:shadow-[0_0_40px_rgba(201,168,76,0.4)] transition-all"
               >
-                {createFeeCheckout.isPending ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to Stripe...</>
-                ) : (
-                  <><Diamond className="w-4 h-4" /> Pay $20 & Activate Listing</>
-                )}
-              </button>
-            ) : (
-              <div className="p-4 border border-[#C9A84C]/20">
-                <p className="text-sm text-[#C8BC98] mb-3">Sign in to pay the listing fee and activate your item</p>
-                <Link
-                  to="/login"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[10px] tracking-[3px] uppercase font-bold"
-                >
-                  Sign In to Continue
-                </Link>
-              </div>
-            )}
+                View Listing
+              </Link>
+              <Link
+                to={`/social-leads/${createdListingId}`}
+                className="w-full flex items-center justify-center gap-3 py-4 border border-[#C9A84C] text-[#C9A84C] font-cinzel text-[11px] tracking-[3px] uppercase font-bold hover:bg-[#C9A84C]/8 transition-all"
+              >
+                View Buyer Leads
+              </Link>
+            </div>
           </div>
 
           {certifyOnChain && (
@@ -254,11 +224,10 @@ export default function Sell() {
           </div>
         </div>
 
-        {/* $20 Fee Banner */}
         <div className="mb-8 p-4 border border-[#C9A84C]/30 bg-[#C9A84C]/5 text-center">
-          <p className="text-[10px] text-[#C9A84C] tracking-[2px] uppercase font-semibold mb-1">$20 One-Time Listing Fee</p>
+          <p className="text-[10px] text-[#C9A84C] tracking-[2px] uppercase font-semibold mb-1">No Listing Fee</p>
           <p className="text-[10px] text-[#8A6E2F] max-w-lg mx-auto">
-            After submitting your item, pay a one-time $20 fee to activate it on the exchange. This unlocks AI-powered social media buyer search. We do not take possession of items.
+            {NO_EXTRA_FEES_SENTENCE} Commission is 5% under $1,000, 7% from $1,000 to $10,000, and 5% over $10,000, collected only when an item sells. We do not take possession of items.
           </p>
         </div>
 
@@ -484,7 +453,7 @@ export default function Sell() {
                   <div className="p-4 bg-[#1E1E1E] text-center">
                     <p className="text-[8px] tracking-[2px] text-[#8A6E2F] uppercase mb-1">Asking Price</p>
                     <p className="font-cinzel text-2xl font-bold text-[#C9A84C]">
-                      ${numPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      ${formatUsd(numPrice)}
                     </p>
                   </div>
 
@@ -496,13 +465,13 @@ export default function Sell() {
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-xs text-[#C8BC98]">Vault Fee</span>
                       <span className="font-cinzel text-sm text-[#FFD97A]">
-                        ${commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ${formatUsd(commission)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-[#C9A84C]/15">
                       <span className="text-xs text-[#F5EED8] font-medium">You Receive</span>
                       <span className="font-cinzel text-base font-bold text-emerald-400">
-                        ${youReceive.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ${formatUsd(youReceive)}
                       </span>
                     </div>
                   </div>
@@ -523,10 +492,12 @@ export default function Sell() {
               <div className="mt-6 pt-6 border-t border-[#C9A84C]/15">
                 <p className="text-[8px] tracking-[2px] text-[#8A6E2F] uppercase mb-3">Commission Tiers</p>
                 <div className="space-y-2 text-[10px]">
-                  <div className="flex justify-between"><span className="text-[#C8BC98]">Under $1,000</span><span className="font-cinzel text-[#C9A84C]">5%</span></div>
-                  <div className="flex justify-between"><span className="text-[#C8BC98]">$1,000 - $7,500</span><span className="font-cinzel text-[#C9A84C]">7%</span></div>
-                  <div className="flex justify-between"><span className="text-[#C8BC98]">$7,500 - $10,000</span><span className="font-cinzel text-[#C9A84C]">10%</span></div>
-                  <div className="flex justify-between"><span className="text-[#C8BC98]">$10,000+</span><span className="font-cinzel text-[#C9A84C]">5%</span></div>
+                  {COMMISSION_TIERS.map((tier) => (
+                    <div key={tier.range} className="flex justify-between">
+                      <span className="text-[#C8BC98]">{tier.range}</span>
+                      <span className="font-cinzel text-[#C9A84C]">{tier.rate}%</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

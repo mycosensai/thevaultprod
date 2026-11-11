@@ -135,8 +135,8 @@ KNOWN POLICIES:
 - Returns: Returns accepted within 14 days of delivery if item is not as described. Items must be in same condition.
 - Authentication: The Vault offers ProVerify — a multi-expert review system. Blockchain certificates available for additional fee.
 - Payments: We accept credit/debit cards (Stripe), cryptocurrency (Solana, BTC, ETH), and Coinbase Commerce. The Vault does not hold funds — payments go directly between buyer and seller.
-- Listing Fee: $20 one-time fee per listing. No monthly charges.
-- Commission: Commission rates are displayed at listing creation and vary by category.
+- Listing Fee: None. There is no listing fee, no monthly fees, and no hidden charges.
+- Commission: 5% on items under $1,000, 7% on items from $1,000 to $10,000, and 5% on items over $10,000. Commission is collected only when an item sells.
 - Security: The Vault uses industry-standard security. We never request passwords or banking info via email.
 - Contact: support@thevaultdfw.win
 

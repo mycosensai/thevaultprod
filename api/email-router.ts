@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 import { env } from "./lib/env";
 import { sendEmail, buildAppraisalEmail } from "./email-service";
 import { logAudit, getClientIP } from "./security";
+import { commissionRateString } from "../src/lib/commission-policy";
 
 export const emailRouter = createRouter({
   /**
@@ -49,7 +50,7 @@ export const emailRouter = createRouter({
       const ev = Number(appraisal.estimatedValue) || 0;
       const low = Number(appraisal.valueRangeLow) || ev * 0.5;
       const high = Number(appraisal.valueRangeHigh) || ev * 1.5;
-      const commissionRate = appraisal.commissionRate || "5.00";
+      const commissionRate = appraisal.commissionRate || commissionRateString(ev);
       const commissionEstimate = ev * (parseFloat(commissionRate) / 100);
 
       // Build payment link if not provided

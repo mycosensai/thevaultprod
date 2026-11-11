@@ -13,7 +13,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { listings, saleTransactions, sellerPayouts, commissionTiers } from "@db/schema";
+import { listings, saleTransactions, sellerPayouts } from "@db/schema";
+import { getCommissionRateFromTiers } from "./lib/commission";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
 import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
@@ -43,22 +44,7 @@ async function stripeFetch(endpoint: string, body?: URLSearchParams): Promise<an
  * Calculate commission based on sale price using commission tiers
  */
 async function calculateCommission(db: any, salePrice: number): Promise<{ rate: number; amount: number }> {
-  const tiers = await db.select().from(commissionTiers).where(eq(commissionTiers.isActive, true));
-
-  // Default rate if no tiers configured
-  let rate = 5.0;
-
-  if (tiers.length > 0) {
-    for (const tier of tiers) {
-      const min = Number(tier.minAmount);
-      const max = tier.maxAmount ? Number(tier.maxAmount) : Infinity;
-      if (salePrice >= min && salePrice <= max) {
-        rate = Number(tier.rate);
-        break;
-      }
-    }
-  }
-
+  const rate = Number(await getCommissionRateFromTiers(db, salePrice));
   const amount = (salePrice * rate) / 100;
   return { rate, amount };
 }

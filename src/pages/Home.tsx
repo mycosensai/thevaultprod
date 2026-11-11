@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { useState, useEffect, useRef } from 'react'
 import { trpc } from '@/providers/trpc'
+import { COMMISSION_TIERS, commissionBreakdown, formatUsd } from '@/lib/commission-policy'
 import {
   Diamond, ArrowRight, Sparkles, ShieldCheck, Clock,
   TrendingUp, Gem, Coins, Landmark, Palette, Watch, Trophy, BookOpen,
@@ -149,10 +150,8 @@ function Particles() {
    ═══════════════════════════════════════════ */
 function MarqueeSection() {
   const items = [
-    '5% Commission Under $1,000',
-    '7% Commission $1,000 - $7,500',
-    '10% Commission $7,500 - $10,000',
-    '5% Commission Over $10,000',
+    ...COMMISSION_TIERS.map((tier) => `${tier.rate}% Commission ${tier.range}`),
+    'No Listing Fee',
     'AI-Powered Buyer Matching',
     'Verified Collectors Only',
     'Real-Time Market Pricing',
@@ -182,21 +181,11 @@ function CalculatorSection() {
   const [value, setValue] = useState('')
 
   const numValue = parseFloat(value) || 0
-  let rate = 5
-  if (numValue >= 10000) rate = 5
-  else if (numValue >= 7500) rate = 10
-  else if (numValue >= 1000) rate = 7
-  else rate = 5
-
-  const commission = numValue * (rate / 100)
-  const payout = numValue - commission
-
-  const tiers = [
-    { rate: 5, range: 'Under $1,000', label: 'Entry', active: numValue > 0 && numValue < 1000 },
-    { rate: 7, range: '$1,000 - $7,500', label: 'Standard', active: numValue >= 1000 && numValue < 7500 },
-    { rate: 10, range: '$7,500 - $10,000', label: 'Premium', active: numValue >= 7500 && numValue < 10000 },
-    { rate: 5, range: '$10,000+', label: 'Elite', active: numValue >= 10000 },
-  ]
+  const { rate, commission, payout } = commissionBreakdown(numValue)
+  const tiers = COMMISSION_TIERS.map((tier) => ({
+    ...tier,
+    active: tier.matches(numValue),
+  }))
 
   return (
     <section className="py-24 px-4 sm:px-6 lg:px-8 relative">
@@ -242,10 +231,10 @@ function CalculatorSection() {
           </div>
 
           {/* Tier indicators */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
             {tiers.map((tier) => (
               <div
-                key={tier.rate}
+                key={tier.range}
                 className={`p-4 border transition-all ${
                   tier.active
                     ? 'border-[#C9A84C] bg-[#C9A84C]/6 shadow-[0_0_15px_rgba(201,168,76,0.1)]'
@@ -267,19 +256,19 @@ function CalculatorSection() {
               <div className="p-4 bg-[#161616] text-center">
                 <div className="text-[8px] tracking-[3px] text-[#8A6E2F] uppercase mb-2">Item Value</div>
                 <div className="font-cinzel text-base sm:text-lg font-bold text-[#E8CB7A]">
-                  ${numValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${formatUsd(numValue)}
                 </div>
               </div>
               <div className="p-4 bg-[#161616] text-center border border-[#C9A84C]/30">
                 <div className="text-[8px] tracking-[3px] text-[#8A6E2F] uppercase mb-2">Commission ({rate}%)</div>
                 <div className="font-cinzel text-lg sm:text-xl font-bold text-[#FFD97A]">
-                  ${commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${formatUsd(commission)}
                 </div>
               </div>
               <div className="p-4 bg-[#161616] text-center">
                 <div className="text-[8px] tracking-[3px] text-[#8A6E2F] uppercase mb-2">You Receive</div>
                 <div className="font-cinzel text-base sm:text-lg font-bold text-[#E8CB7A]">
-                  ${payout.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${formatUsd(payout)}
                 </div>
               </div>
             </div>
@@ -349,7 +338,7 @@ function HowItWorksSection() {
       num: '02',
       icon: <ShieldCheck className="w-6 h-6" />,
       title: 'List Your Item',
-      desc: 'Create your listing with our transparent commission structure. 5%, 7%, 10%, or 15% based on item value.',
+      desc: 'Create your listing with no listing fee. Commission is 5% under $1,000, 7% from $1,000 to $10,000, and 5% over $10,000.',
     },
     {
       num: '03',
