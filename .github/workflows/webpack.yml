@@ -1,4 +1,4 @@
-name: NodeJS with Webpack
+name: Vite production build
 
 on:
   push:
@@ -7,22 +7,19 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  vite-build:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x, 22.x]
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Use Node.js 22
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 22
+        cache: npm
 
-    - name: Build
+    - name: Install and build
       run: |
-        npm install
-        npx webpack
+        npm ci
+        npm run build
