@@ -5,6 +5,8 @@ import { verifyLocalToken } from "./local-auth-router";
 import { getDb } from "./queries/connection";
 import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { LOCAL_AUTH_COOKIE, readRequestCookie } from "./lib/cookies";
+import { toPublicUser } from "./lib/public-user";
 
 export type TrpcContext = {
   req: Request;
@@ -25,16 +27,16 @@ export async function createContext(
     const oauthUser = await verifyOAuthSession(opts.req.headers);
 
     if (oauthUser) {
-      ctx.user = oauthUser as User;
+      ctx.user = toPublicUser(oauthUser) as User;
       return ctx;
     }
   } catch {
     // OAuth session invalid
   }
 
-  // Local auth fallback
+  // Local auth: httpOnly cookie, then a legacy header for non-browser clients.
   try {
-    const localToken = opts.req.headers.get("x-local-auth-token");
+    const localToken = readRequestCookie(opts.req.headers, LOCAL_AUTH_COOKIE) || opts.req.headers.get("x-local-auth-token");
 
     if (localToken) {
       const userId = await verifyLocalToken(localToken);
@@ -49,7 +51,7 @@ export async function createContext(
           .limit(1);
 
         if (user) {
-          ctx.user = user;
+          ctx.user = toPublicUser(user) as User;
         }
       }
     }

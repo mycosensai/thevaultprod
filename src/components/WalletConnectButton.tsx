@@ -3,7 +3,6 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Wallet } from "lucide-react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
-import { walletConnectEnabled } from "@/lib/wagmi";
 
 function shortAddress(value: string) {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
@@ -25,7 +24,7 @@ export function WalletConnectButton({ compact = false }: { compact?: boolean }) 
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const { address, isConnected, chainId } = useAccount();
-  const { connect, connectors, isPending, error } = useConnect();
+  const { connectAsync, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const solana = useWallet();
@@ -41,6 +40,7 @@ export function WalletConnectButton({ compact = false }: { compact?: boolean }) 
   }, [open]);
 
   const summary = isConnected && address ? shortAddress(address) : solana.connected && solanaAddress ? shortAddress(solanaAddress) : "Connect";
+  const walletConnectReady = connectors.some((connector) => `${connector.id} ${connector.name}`.toLowerCase().includes("walletconnect"));
 
   return (
     <div className="relative" ref={panel}>
@@ -66,16 +66,17 @@ export function WalletConnectButton({ compact = false }: { compact?: boolean }) 
                 type="button"
                 disabled={isPending}
                 onClick={() => {
-                  connect({ connector, chainId: base.id });
-                  setOpen(false);
+                  void connectAsync({ connector, chainId: base.id })
+                    .then(() => setOpen(false))
+                    .catch(() => undefined);
                 }}
                 className="block w-full px-2 py-2 text-left text-[11px] text-[#F5EED8] hover:bg-[#C9A84C]/10 hover:text-[#E8CB7A]"
               >
                 {evmLabel(connector.id, connector.name)}
               </button>
             ))}
-            {!walletConnectEnabled && (
-              <p className="px-2 py-1 text-[10px] leading-relaxed text-[#8A6E2F]">WalletConnect stays off until a project id is set at build time.</p>
+            {!walletConnectReady && (
+              <p className="px-2 py-1 text-[10px] leading-relaxed text-[#8A6E2F]">WalletConnect stays off until a project id is configured for this site.</p>
             )}
           </div>
           <p className="mt-3 mb-2 font-cinzel text-[8px] tracking-[3px] text-[#8A6E2F] uppercase">Solana</p>

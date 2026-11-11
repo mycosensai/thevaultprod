@@ -1,17 +1,19 @@
 /**
- * $20 One-Time Listing Fee System
- * Integrated with Stripe Checkout
- * Sellers must pay before their listing goes live on the exchange
+ * Listing fee records.
+ * The Vault does not charge a listing fee. createCheckout keeps the old
+ * procedure name so existing clients do not start a paid checkout.
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
+import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, listingFees } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
 import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
 import { TRPCError } from "@trpc/server";
+import { paymentProviderError } from "./lib/stripe-error";
+import { canManageOwnedRow } from "./security";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -26,18 +28,16 @@ async function stripeFetch(endpoint: string, body?: URLSearchParams): Promise<an
     body: body?.toString(),
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Stripe API error: ${err}`);
+    await res.text();
+    throw paymentProviderError(res.status);
   }
   return res.json();
 }
 
-const FEE_AMOUNT_CENTS = 2000; // $20.00
-const FEE_AMOUNT_DOLLARS = "20.00";
-
 export const listingFeeRouter = createRouter({
   /**
-   * Create a Stripe Checkout session for the $20 listing fee
+   * Confirm a listing without charging a listing fee.
+   * successUrl and cancelUrl stay in the input for older clients.
    */
   createCheckout: authedQuery
     .input(
@@ -54,7 +54,6 @@ export const listingFeeRouter = createRouter({
       const db = getDb();
       const user = ctx.user!;
 
-      // Verify listing exists and belongs to user
       const [listing] = await db
         .select()
         .from(listings)
@@ -66,72 +65,28 @@ export const listingFeeRouter = createRouter({
         throw new Error("You do not own this listing");
       }
 
-      // Check if fee already paid
-      const existing = await db
-        .select()
-        .from(listingFees)
-        .where(eq(listingFees.listingId, input.listingId))
-        .limit(1);
-
-      if (existing.length > 0 && existing[0].status === "paid") {
-        return {
-          success: true,
-          alreadyPaid: true,
-          feeId: existing[0].id,
-          message: "Listing fee already paid.",
-        };
-      }
-
-      // Create Stripe Checkout session
-      const body = new URLSearchParams({
-        "payment_method_types[]": "card",
-        "line_items[0][price_data][currency]": "usd",
-        "line_items[0][price_data][product_data][name]": `The Vault Listing Fee - "${listing.title}"`,
-        "line_items[0][price_data][product_data][description]": "One-time fee to list your item on The Vault exchange. Includes AI buyer search.",
-        "line_items[0][price_data][unit_amount]": String(FEE_AMOUNT_CENTS),
-        "line_items[0][quantity]": "1",
-        mode: "payment",
-        success_url: input.successUrl,
-        cancel_url: input.cancelUrl,
-        "metadata[listingId]": String(input.listingId),
-        "metadata[userId]": String(user.id),
-        "metadata[feeType]": "listing_fee",
-      });
-
-      const session = await stripeFetch("/checkout/sessions", body);
-
-      // Create fee record
-      const insertResult = await db.insert(listingFees).values({
-        userId: user.id,
-        listingId: input.listingId,
-        stripeSessionId: session.id,
-        amount: FEE_AMOUNT_DOLLARS,
-        status: "pending",
-      });
-      const feeId = Number(insertResult.meta.last_row_id);
-
       logAudit({
         ip: getClientIP(ctx.req),
         method: "POST",
         path: "listingFee.createCheckout",
         userId: user.id,
-        action: "listing_fee_checkout_created",
-        details: `listing:${input.listingId} fee:${feeId} session:${session.id}`,
+        action: "listing_fee_waived",
+        details: `listing:${input.listingId} amount:0.00`,
       });
 
       return {
         success: true,
-        feeId,
-        sessionId: session.id,
-        url: session.url,
-        amount: FEE_AMOUNT_DOLLARS,
+        alreadyPaid: true,
+        url: null,
+        amount: "0.00",
+        message: "The Vault does not charge a listing fee. Commission is collected only when the item sells.",
       };
     }),
 
   /**
    * Verify listing fee payment from Stripe webhook or manual check
    */
-  verifyPayment: publicQuery
+  verifyPayment: authedQuery
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -150,6 +105,10 @@ export const listingFeeRouter = createRouter({
 
       if (!fee) {
         return { success: false, message: "Fee record not found" };
+      }
+
+      if (!canManageOwnedRow(ctx.user, fee.userId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
       }
 
       if (fee.status === "paid") {
@@ -190,9 +149,9 @@ export const listingFeeRouter = createRouter({
   /**
    * Check if a listing fee has been paid
    */
-  checkStatus: publicQuery
+  checkStatus: authedQuery
     .input(z.object({ listingId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
 
       const [fee] = await db
@@ -203,6 +162,10 @@ export const listingFeeRouter = createRouter({
 
       if (!fee) {
         return { paid: false, status: "not_found" };
+      }
+
+      if (!canManageOwnedRow(ctx.user, fee.userId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
       }
 
       return {

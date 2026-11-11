@@ -30,15 +30,26 @@ Reference tokens live in `contracts/reference-tokens.ts`. The defaults are AERO 
 
 ## Wallet connect
 
-The toolbar uses wagmi for EVM wallets and Solana wallet-adapter for Phantom, Solflare, and Backpack. MetaMask, Coinbase Wallet, Rainbow, and Phantom on EVM use injected connectors. WalletConnect is added only when a project id is present at build time.
+The toolbar uses wagmi for EVM wallets and Solana wallet-adapter for Phantom, Solflare, and Backpack. MetaMask, Coinbase Wallet, Rainbow, and Phantom on EVM use injected connectors. WalletConnect is added when a Reown project id is available. `@walletconnect/ethereum-provider`, `@coinbase/wallet-sdk`, and `@metamask/connect-evm` are direct dependencies because wagmi loads them only when those connectors are clicked.
+
+Vite only inlines `VITE_` variables by itself. `vite.config.ts` also reads `WALLETCONNECT_PROJECT_ID` and `REOWN_PROJECT_ID` (the names used on Cloudflare Pages) and inlines `__VAULT_WALLETCONNECT_PROJECT_ID__` only when the value is a Reown project id. The first valid id wins:
+
+- `VITE_WALLETCONNECT_PROJECT_ID`
+- `VITE_REOWN_PROJECT_ID`
+- `WALLETCONNECT_PROJECT_ID`
+- `REOWN_PROJECT_ID`
+
+The value has to be a Reown project id: 32 hex characters, or a UUID. Other values are ignored and are not copied into the bundle. Do not commit the id.
+
+If that id was not present for `vite build`, the storefront still renders immediately and then requests `GET /api/wallet-connect-config` in the background. The Pages Function reads the same names from the runtime environment of the project that is serving the site and returns only `{ enabled, projectId }` or `{ enabled: false }`. WalletConnect is added when that response arrives. GitHub Actions builds `dist` and then uploads it, so a Pages variable is not visible to that Vite build unless the repository secret of the same name is set. The Function still sees the Pages runtime variable after the upload.
 
 ## Deploy
 
-A push to `main` runs `.github/workflows/deploy.yml`. That job uses Node 22, builds `dist`, and runs `wrangler pages deploy dist --project-name thevault-77h`. The live domain is a CNAME to that Pages project. There is no second deploy workflow and no Worker `main` entry. Pages Functions stay in `functions/`.
+The live site is the Cloudflare Pages project `thevault` (not `thevault-77h`), built from Git on branch `main`. Pages Functions stay in `functions/`. There is no Worker `main` entry. `.github/workflows/deploy.yml` is manual only and targets `--project-name thevault`; do not run it until `CLOUDFLARE_API_TOKEN` is rotated.
 
-This app is not deployed to Vercel. Set these where the Pages build runs, because `VITE_` values are inlined by Vite. In GitHub Actions they are read from repository secrets of the same name:
+This app is not deployed to Vercel. `VITE_` values are inlined by Vite at build time. The Vite config also reads `WALLETCONNECT_PROJECT_ID` and `REOWN_PROJECT_ID`. On the Pages project `thevault`, set:
 
-- `VITE_WALLETCONNECT_PROJECT_ID` from https://cloud.reown.com if you want the WalletConnect QR option. Leave it empty to ship injected wallets only. Do not commit the id.
+- `WALLETCONNECT_PROJECT_ID` or `VITE_WALLETCONNECT_PROJECT_ID` from https://cloud.reown.com if you want the WalletConnect QR option. Leave them empty to ship injected wallets only. Do not commit the id. The live Pages variable name is `WALLETCONNECT_PROJECT_ID`. A GitHub Actions build only sees a repository secret of the same name.
 - `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_STRIPE_PUBLISHABLE_KEY` for the existing sign-in and card checkout.
 - Server secrets stay in Cloudflare: `APP_SECRET`, `CLERK_SECRET_KEY`, `STRIPE_SECRET_KEY`, and the existing Solana treasury variables for direct checkout. Token launches do not add a server key.
 

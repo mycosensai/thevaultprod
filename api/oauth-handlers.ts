@@ -18,7 +18,8 @@ import { sql } from "drizzle-orm";
 import * as jose from "jose";
 import { env } from "./lib/env";
 import { getSessionCookieOptions } from "./lib/cookies";
-import { logAudit, getClientIP } from "./security";
+import { logAudit, getClientIP, isTokenRevoked, isUserSessionRevoked } from "./security";
+import { getRawD1 } from "./queries/connection";
 
 // Read during a request. Module init runs before Pages bindings exist, and
 // env.appSecret would generate a random dev fallback, which Workers reject.
@@ -166,14 +167,9 @@ export async function handleOAuthCallback(c: Context, provider: OAuthProvider) {
 
     return c.redirect("/", 302);
   } catch (err) {
-    console.error(`[OAuth ${provider}] Callback error:`, err);
-    return c.redirect(
-      "/?oauth_error=" +
-        encodeURIComponent(
-          err instanceof Error ? err.message : "callback_failed"
-        ),
-      302
-    );
+    const name = err instanceof Error ? err.name : "Error";
+    console.error(`[OAuth ${provider}] Callback error: ${name}`);
+    return c.redirect("/?oauth_error=callback_failed", 302);
   }
 }
 
@@ -203,6 +199,11 @@ export async function verifyOAuthSession(
     const userId = payload.userId as number;
     if (!userId) return null;
 
+    const d1 = getRawD1() ?? undefined;
+    if (await isTokenRevoked(token, d1)) return null;
+    const issuedAt = typeof payload.iat === "number" ? payload.iat * 1000 + 999 : 0;
+    if (await isUserSessionRevoked(userId, issuedAt, d1)) return null;
+
     const db = getDb();
     const [user] = await db
       .select()
@@ -210,7 +211,14 @@ export async function verifyOAuthSession(
       .where(eq(users.id, userId))
       .limit(1);
 
-    return user || null;
+    if (!user?.id) return null;
+    return {
+      id: user.id,
+      name: user.name ?? null,
+      email: user.email ?? null,
+      avatar: user.avatar ?? null,
+      role: user.role,
+    };
   } catch {
     return null;
   }

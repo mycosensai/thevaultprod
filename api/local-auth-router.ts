@@ -1,22 +1,26 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
-import { getDb } from "./queries/connection";
+import { getDb, getRawD1 } from "./queries/connection";
 import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { SignJWT, jwtVerify } from "jose";
 import { TRPCError } from "@trpc/server";
-import { validatePasswordStrength, logAudit, getClientIP } from "./security";
+import { validatePasswordStrength, logAudit, getClientIP, isTokenRevoked, isUserSessionRevoked } from "./security";
 import { env } from "./lib/env";
+import { appendSessionCookie, LOCAL_AUTH_COOKIE, readRequestCookie, SESSION_MAX_AGE_SECONDS } from "./lib/cookies";
+import { toPublicUser } from "./lib/public-user";
 
-// Lazy JWT secret — resolves at first use, not at module load
+// Lazy JWT secret — resolved on first use, refreshed if APP_SECRET changes.
+// Nothing here runs at module load: Pages evaluates this file before bindings exist.
+let jwtSecretValue = "";
 let jwtSecretCache: Uint8Array | null = null;
 function getJwtSecret(): Uint8Array {
-  if (jwtSecretCache) return jwtSecretCache;
   const secret = env.appSecret;
-  if (!secret || secret === "fallback-secret") {
-    // Allow operation with warning - environment variable should be set for production
-    console.warn("WARNING: APP_SECRET not configured. Using fallback for development.");
+  if (!secret) {
+    throw new Error("APP_SECRET is not configured");
   }
+  if (jwtSecretCache && jwtSecretValue === secret) return jwtSecretCache;
+  jwtSecretValue = secret;
   jwtSecretCache = new TextEncoder().encode(secret);
   return jwtSecretCache;
 }
@@ -29,15 +33,31 @@ async function createToken(userId: number): Promise<string> {
     .sign(getJwtSecret());
 }
 
+function localAuthTokenFromRequest(headers: Headers): string | null {
+  return readRequestCookie(headers, LOCAL_AUTH_COOKIE) || headers.get("x-local-auth-token");
+}
+
 export async function verifyLocalToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret(), {
       clockTolerance: 60,
     });
-    return payload.sub ? parseInt(payload.sub, 10) : null;
+    const userId = payload.sub ? parseInt(payload.sub, 10) : null;
+    if (!userId) return null;
+    const d1 = getRawD1() ?? undefined;
+    if (await isTokenRevoked(token, d1)) return null;
+    // iat is whole seconds. Compare at the end of that second so a logout
+    // and a new login in the same second do not revoke the new token.
+    const issuedAt = typeof payload.iat === "number" ? payload.iat * 1000 + 999 : 0;
+    if (await isUserSessionRevoked(userId, issuedAt, d1)) return null;
+    return userId;
   } catch {
     return null;
   }
+}
+
+function issueLocalSession(ctx: { req: Request; resHeaders: Headers }, token: string) {
+  appendSessionCookie(ctx.resHeaders, LOCAL_AUTH_COOKIE, token, ctx.req.headers, SESSION_MAX_AGE_SECONDS);
 }
 
 export const localAuthRouter = createRouter({
@@ -91,6 +111,7 @@ export const localAuthRouter = createRouter({
       const userId = Number(insertResult.meta.last_row_id);
 
       const token = await createToken(userId);
+      issueLocalSession(ctx, token);
 
       logAudit({
         ip: getClientIP(ctx.req),
@@ -101,7 +122,6 @@ export const localAuthRouter = createRouter({
       });
 
       return {
-        token,
         user: {
           id: userId,
           name: input.name,
@@ -156,6 +176,7 @@ export const localAuthRouter = createRouter({
       }
 
       const token = await createToken(user.id);
+      issueLocalSession(ctx, token);
 
       logAudit({
         ip: getClientIP(ctx.req),
@@ -166,7 +187,6 @@ export const localAuthRouter = createRouter({
       });
 
       return {
-        token,
         user: {
           id: user.id,
           name: user.name,
@@ -177,10 +197,10 @@ export const localAuthRouter = createRouter({
     }),
 
   me: publicQuery.query(async ({ ctx }) => {
-    const authHeader = ctx.req.headers.get("x-local-auth-token");
-    if (!authHeader) return null;
+    const token = localAuthTokenFromRequest(ctx.req.headers);
+    if (!token) return null;
 
-    const userId = await verifyLocalToken(authHeader);
+    const userId = await verifyLocalToken(token);
     if (!userId) return null;
 
     const db = getDb();
@@ -190,16 +210,18 @@ export const localAuthRouter = createRouter({
       .where(eq(users.id, userId))
       .limit(1);
 
-    return user || null;
+    return user ? toPublicUser(user) : null;
   }),
 });
 function bytesToBase64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-function base64ToBytes(input: string): Uint8Array {
+function base64ToBytes(input: string): Uint8Array<ArrayBuffer> {
   const bin = atob(input);
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const bytes = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
 async function hashPassword(password: string): Promise<string> {

@@ -1,4 +1,6 @@
-name = "thevault-77h"
+# Cloudflare Pages project is `thevault`. Git production branch is `main`
+# in the dashboard; this file does not select the branch.
+name = "thevault"
 compatibility_date = "2026-05-22"
 compatibility_flags = ["nodejs_compat"]
 

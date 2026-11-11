@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { Diamond, ShieldCheck, Globe, Users, Award } from 'lucide-react'
+import { COMMISSION_TIERS, NO_EXTRA_FEES_SENTENCE } from '@/lib/commission-policy'
 
 export default function About() {
   return (
@@ -67,21 +68,16 @@ export default function About() {
           <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#C9A84C]" />
           <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#C9A84C]" />
           <h2 className="font-cinzel text-lg font-bold text-[#C9A84C] tracking-[4px] mb-4">COMMISSION STRUCTURE</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6">
-            {[
-              { range: 'Under $1K', rate: '5%' },
-              { range: '$1K - $7.5K', rate: '7%' },
-              { range: '$7.5K - $10K', rate: '10%' },
-              { range: 'Over $10K', rate: '5%' },
-            ].map((tier) => (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-6">
+            {COMMISSION_TIERS.map((tier) => (
               <div key={tier.range}>
-                <div className="font-cinzel text-3xl font-bold text-[#FFD97A]">{tier.rate}</div>
+                <div className="font-cinzel text-3xl font-bold text-[#FFD97A]">{tier.rate}%</div>
                 <div className="text-[10px] tracking-[2px] uppercase text-[#8A6E2F] mt-1">{tier.range}</div>
               </div>
             ))}
           </div>
           <p className="text-[10px] text-[#8A6E2F] mt-6 italic">
-            The lowest fees in the luxury collectibles market. We make our money on volume, not margins.
+            {NO_EXTRA_FEES_SENTENCE} The lowest fees in the luxury collectibles market. We make our money on volume, not margins.
           </p>
         </div>
 

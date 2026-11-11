@@ -219,14 +219,16 @@ export const shippingRouter = createRouter({
   /**
    * Get shipping history for a listing
    */
-  getHistory: publicQuery
+  getHistory: authedQuery
     .input(z.object({ listingId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
-      return db
+      const rows = await db
         .select()
         .from(shippingQuotes)
         .where(eq(shippingQuotes.listingId, input.listingId))
         .orderBy(desc(shippingQuotes.createdAt));
+      if (ctx.user.role === "admin") return rows;
+      return rows.filter((row) => row.sellerId === ctx.user.id || row.buyerId === ctx.user.id);
     }),
 });

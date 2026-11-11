@@ -117,8 +117,9 @@ export const ordersRouter = createRouter({
         .where(eq(orders.id, input.orderId))
         .limit(1);
       if (!order) return null;
-      // Only allow access to own orders or admin
-      if (order.userId && order.userId !== ctx.user?.id) return null;
+      const isAdmin = ctx.user?.role === "admin";
+      const isOwner = order.userId != null && order.userId === ctx.user?.id;
+      if (!isAdmin && !isOwner) return null;
       return order;
     }),
 });

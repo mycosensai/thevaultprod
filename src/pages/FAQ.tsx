@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Diamond, ChevronDown } from 'lucide-react'
+import { COMMISSION_POLICY_SENTENCE, NO_EXTRA_FEES_SENTENCE } from '@/lib/commission-policy'
 
 const faqs = [
   {
@@ -12,7 +13,7 @@ const faqs = [
   },
   {
     q: 'How much does it cost to sell?',
-    a: 'Our commission is the lowest in the industry: 5% for items under $1,000, 7% for $1,000-$7,500, 10% for $7,500-$10,000, and only 5% for items over $10,000. There are no listing fees, no monthly fees, and no hidden charges.'
+    a: `Our commission is the lowest in the industry. ${COMMISSION_POLICY_SENTENCE} ${NO_EXTRA_FEES_SENTENCE}`
   },
   {
     q: 'What is ProVerify?',

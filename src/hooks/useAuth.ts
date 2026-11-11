@@ -69,6 +69,7 @@ export function useAuth() {
     try {
       sessionStorage.removeItem("local_auth_token");
       localStorage.removeItem("local_auth_token");
+      localStorage.removeItem("vault_auth_present");
     } catch (err) {
       console.error("Unable to clear auth token", err);
     }

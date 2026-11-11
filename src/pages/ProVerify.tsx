@@ -163,7 +163,7 @@ export default function ProVerify() {
               <div className="mb-4 p-3 border border-emerald-500/20 bg-emerald-500/5">
                 <p className="text-[9px] text-emerald-400 tracking-[2px] uppercase font-semibold mb-1">After Expert Review:</p>
                 <p className="text-[10px] text-[#C8BC98] leading-relaxed">
-                  Once verified, you can list your item on the exchange for a one-time $20 fee. Our AI will then search X, Reddit, and Instagram for buyers who have mentioned interest in items like yours. You receive their public contact info and connect directly.
+                  Once verified, you can list your item on the exchange with no listing fee. Our AI will then search X, Reddit, and Instagram for buyers who have mentioned interest in items like yours. You receive their public contact info and connect directly.
                 </p>
               </div>
               <button type="submit" disabled={submitApp.isPending}

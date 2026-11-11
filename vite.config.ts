@@ -1,10 +1,44 @@
+import fs from "node:fs"
 import path from "node:path"
 import react from "@vitejs/plugin-react"
 import { VitePWA } from "vite-plugin-pwa"
 import { defineConfig } from "vite"
+import { walletConnectEnvFileNames, walletConnectProjectIdFromSources } from "./api/lib/wallet-connect-build-env"
 
-export default defineConfig({
+function readWalletConnectEnvFiles(cwd: string, mode: string): Record<string, string | undefined> {
+  const fileContents: Record<string, string | undefined> = {}
+  for (const fileName of walletConnectEnvFileNames(mode)) {
+    try {
+      fileContents[fileName] = fs.readFileSync(path.join(cwd, fileName), "utf8")
+    } catch {
+      fileContents[fileName] = undefined
+    }
+  }
+  return fileContents
+}
+
+function walletConnectProjectIdPlugin(projectId: string) {
+  const replacement = JSON.stringify(projectId)
+  return {
+    name: "vault-walletconnect-project-id",
+    enforce: "pre" as const,
+    transform(code: string) {
+      if (!code.includes("__VAULT_WALLETCONNECT_PROJECT_ID__")) return null
+      return code.replaceAll("__VAULT_WALLETCONNECT_PROJECT_ID__", replacement)
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const walletConnectProjectId = walletConnectProjectIdFromSources({
+    fileContents: readWalletConnectEnvFiles(process.cwd(), mode),
+    mode,
+    processEnv: process.env,
+  })
+
+  return {
   plugins: [
+    walletConnectProjectIdPlugin(walletConnectProjectId),
     react(),
     VitePWA({
       strategies: "injectManifest",
@@ -57,6 +91,13 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: [
+      "@walletconnect/ethereum-provider",
+      "@coinbase/wallet-sdk",
+      "@metamask/connect-evm",
+    ],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -80,4 +121,7 @@ export default defineConfig({
       },
     },
   },
-})
+  define: {
+    __VAULT_WALLETCONNECT_PROJECT_ID__: JSON.stringify(walletConnectProjectId),
+  },
+}})

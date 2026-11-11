@@ -3,9 +3,10 @@ import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { ConnectionProvider, useWallet, WalletProvider } from "@solana/wallet-adapter-react";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
-import { wagmiConfig } from "@/lib/wagmi";
+import { readBuildTimeWalletConnectProjectId, resolveWalletConnectProjectId } from "@/lib/resolve-wallet-connect-project-id";
+import { getWagmiConfig, upgradeWagmiConfig } from "@/lib/wagmi";
 
 const solanaWallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter(), new BackpackWalletAdapter()];
 
@@ -19,8 +20,27 @@ function SolanaSelectionConnect({ children }: { children: ReactNode }) {
 }
 
 export function VaultWalletProvider({ children }: { children: ReactNode }) {
+  const [wagmiConfig, setWagmiConfig] = useState(getWagmiConfig);
+
+  useEffect(() => {
+    if (readBuildTimeWalletConnectProjectId()) return;
+    let cancelled = false;
+    void resolveWalletConnectProjectId().then((projectId) => {
+      if (cancelled) return;
+      const next = upgradeWagmiConfig(projectId);
+      setWagmiConfig((current) => (current === next ? current : next));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const walletConnectReady = wagmiConfig.connectors.some((connector) =>
+    `${connector.id} ${connector.name}`.toLowerCase().includes("walletconnect"),
+  );
+
   return (
-    <WagmiProvider config={wagmiConfig} reconnectOnMount>
+    <WagmiProvider key={walletConnectReady ? "walletconnect" : "injected"} config={wagmiConfig} reconnectOnMount>
       <ConnectionProvider endpoint={SOLANA_RPC_URLS[0]}>
         <WalletProvider wallets={solanaWallets} autoConnect>
           <SolanaSelectionConnect>{children}</SolanaSelectionConnect>

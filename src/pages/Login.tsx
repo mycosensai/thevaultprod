@@ -32,15 +32,6 @@ function GitHubIcon({ className }: { className?: string }) {
   )
 }
 
-function persistAuthToken(token: string) {
-  try {
-    sessionStorage.setItem('local_auth_token', token)
-    localStorage.setItem('vault_auth_present', 'true')
-  } catch (err) {
-    console.error('Unable to persist auth token', err)
-  }
-}
-
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase()
 }
@@ -99,23 +90,17 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
 
-  const handleAuthSuccess = (token?: string) => {
-    if (!token) {
-      setError('Authentication completed but no token was returned.')
-      return
-    }
-
-    persistAuthToken(token)
+  const handleAuthSuccess = () => {
     window.location.href = '/'
   }
 
   const loginMutation = trpc.localAuth.login.useMutation({
-    onSuccess: (data) => handleAuthSuccess(data?.token),
+    onSuccess: () => handleAuthSuccess(),
     onError: (err) => setError(cleanAuthError(err.message)),
   })
 
   const registerMutation = trpc.localAuth.register.useMutation({
-    onSuccess: (data) => handleAuthSuccess(data?.token),
+    onSuccess: () => handleAuthSuccess(),
     onError: (err) => setError(cleanAuthError(err.message)),
   })
 

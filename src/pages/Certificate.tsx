@@ -97,28 +97,28 @@ export default function Certificate() {
             <div className="bg-[#111111] border border-[#C9A84C]/30 p-6 mb-8 text-left max-w-lg mx-auto">
               <div className="grid grid-cols-1 gap-4 text-xs">
                 <div className="flex justify-between border-b border-[#C9A84C]/20 pb-2">
-                  <span className="text-[#8A6E2F] font-cinzel tracking-[2px] uppercase text-[9px]">Item</span>
-                  <span className="text-[#1a1a1a] font-medium text-right max-w-[60%]">{cert.itemName}</span>
+                  <span className="text-[#C9A84C] font-cinzel tracking-[2px] uppercase text-[9px]">Item</span>
+                  <span className="text-[#F5EED8] font-medium text-right max-w-[60%]">{cert.itemName}</span>
                 </div>
                 <div className="flex justify-between border-b border-[#C9A84C]/20 pb-2">
-                  <span className="text-[#8A6E2F] font-cinzel tracking-[2px] uppercase text-[9px]">Network</span>
-                  <span className="text-[#1a1a1a] font-medium">{cert.network === 'ethereum_sepolia' ? 'Ethereum Sepolia' : cert.network}</span>
+                  <span className="text-[#C9A84C] font-cinzel tracking-[2px] uppercase text-[9px]">Network</span>
+                  <span className="text-[#F5EED8] font-medium">{cert.network === 'ethereum_sepolia' ? 'Ethereum Sepolia' : cert.network}</span>
                 </div>
                 <div className="flex justify-between border-b border-[#C9A84C]/20 pb-2">
-                  <span className="text-[#8A6E2F] font-cinzel tracking-[2px] uppercase text-[9px]">Contract Address</span>
-                  <span className="text-[#1a1a1a] font-mono text-[10px] truncate max-w-[60%]">{cert.contractAddress}</span>
+                  <span className="text-[#C9A84C] font-cinzel tracking-[2px] uppercase text-[9px]">Contract Address</span>
+                  <span className="text-[#F5EED8] font-mono text-[10px] truncate max-w-[60%]">{cert.contractAddress}</span>
                 </div>
                 <div className="flex justify-between border-b border-[#C9A84C]/20 pb-2">
-                  <span className="text-[#8A6E2F] font-cinzel tracking-[2px] uppercase text-[9px]">Token ID</span>
-                  <span className="text-[#1a1a1a] font-mono">#{cert.tokenId}</span>
+                  <span className="text-[#C9A84C] font-cinzel tracking-[2px] uppercase text-[9px]">Token ID</span>
+                  <span className="text-[#F5EED8] font-mono">#{cert.tokenId}</span>
                 </div>
                 <div className="flex justify-between border-b border-[#C9A84C]/20 pb-2">
-                  <span className="text-[#8A6E2F] font-cinzel tracking-[2px] uppercase text-[9px]">Block Hash</span>
-                  <span className="text-[#1a1a1a] font-mono text-[10px] truncate max-w-[60%]">{cert.blockHash}</span>
+                  <span className="text-[#C9A84C] font-cinzel tracking-[2px] uppercase text-[9px]">Block Hash</span>
+                  <span className="text-[#F5EED8] font-mono text-[10px] truncate max-w-[60%]">{cert.blockHash}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#8A6E2F] font-cinzel tracking-[2px] uppercase text-[9px]">Block Number</span>
-                  <span className="text-[#1a1a1a] font-mono">{Number(cert.blockNumber).toLocaleString()}</span>
+                  <span className="text-[#C9A84C] font-cinzel tracking-[2px] uppercase text-[9px]">Block Number</span>
+                  <span className="text-[#F5EED8] font-mono">{Number(cert.blockNumber).toLocaleString()}</span>
                 </div>
               </div>
             </div>

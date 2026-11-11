@@ -13,11 +13,13 @@
 import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { listings, saleTransactions, sellerPayouts, commissionTiers } from "@db/schema";
+import { listings, saleTransactions, sellerPayouts } from "@db/schema";
+import { getCommissionRateFromTiers } from "./lib/commission";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
 import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
 import { TRPCError } from "@trpc/server";
+import { paymentProviderError } from "./lib/stripe-error";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -32,8 +34,8 @@ async function stripeFetch(endpoint: string, body?: URLSearchParams): Promise<an
     body: body?.toString(),
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Stripe API error: ${err}`);
+    await res.text();
+    throw paymentProviderError(res.status);
   }
   return res.json();
 }
@@ -42,22 +44,7 @@ async function stripeFetch(endpoint: string, body?: URLSearchParams): Promise<an
  * Calculate commission based on sale price using commission tiers
  */
 async function calculateCommission(db: any, salePrice: number): Promise<{ rate: number; amount: number }> {
-  const tiers = await db.select().from(commissionTiers).where(eq(commissionTiers.isActive, true));
-
-  // Default rate if no tiers configured
-  let rate = 5.0;
-
-  if (tiers.length > 0) {
-    for (const tier of tiers) {
-      const min = Number(tier.minAmount);
-      const max = tier.maxAmount ? Number(tier.maxAmount) : Infinity;
-      if (salePrice >= min && salePrice <= max) {
-        rate = Number(tier.rate);
-        break;
-      }
-    }
-  }
-
+  const rate = Number(await getCommissionRateFromTiers(db, salePrice));
   const amount = (salePrice * rate) / 100;
   return { rate, amount };
 }
