@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { resetCloudflareEnv, setCloudflareEnv } from "./lib/env";
 import { buildAuthUrl, oauthCallbackBase } from "./oauth-providers";
+import { walletConnectProjectIdOrEmpty } from "../contracts/walletconnect";
 import { revokeAllUserSessions } from "./security";
 import { onRequest } from "../functions/[[path]]";
 
@@ -64,6 +65,53 @@ describe("Pages runtime wiring", () => {
     const redirect = new URL(result.url).searchParams.get("redirect_uri");
     expect(redirect).toBe("https://thevaultdfw.win/api/oauth/callback/google");
     expect(redirect).not.toContain("localhost");
+  });
+
+  it("does not leak database failures from the login route", async () => {
+    const response = await onRequest({
+      request: new Request("https://thevaultdfw.win/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", host: "thevaultdfw.win" },
+        body: JSON.stringify({ email: "member@thevaultdfw.win", password: "Str0ng!Pass" }),
+      }),
+      env: { ENVIRONMENT: "production", APP_SECRET, VAULT_DOMAIN: "thevaultdfw.win" },
+    });
+    expect(response.status).toBe(400);
+    const body = await response.text();
+    expect(body).toContain("Authentication failed");
+    expect(body).not.toContain("Database not initialized");
+    expect(body).not.toContain("users");
+    expect(body).not.toContain("\"stack\"");
+  });
+
+  it("drops a WalletConnect binding that is not a 32-hex project id", async () => {
+    const marker = "not-a-project-id";
+    const response = await onRequest(
+      pagesContext("https://thevaultdfw.win/api/public-config", {
+        ENVIRONMENT: "production",
+        APP_SECRET,
+        WALLETCONNECT_PROJECT_ID: marker,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).not.toContain(marker);
+    expect(JSON.parse(body)).toEqual({ walletConnectEnabled: false, walletConnectProjectId: "" });
+    expect(walletConnectProjectIdOrEmpty(marker)).toBe("");
+  });
+
+  it("serves a synthetic WalletConnect project id from the Pages binding", async () => {
+    const fixture = "ab".repeat(16);
+    const response = await onRequest(
+      pagesContext("https://thevaultdfw.win/api/public-config", {
+        APP_SECRET,
+        WALLETCONNECT_PROJECT_ID: fixture,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { walletConnectEnabled: boolean; walletConnectProjectId: string };
+    expect(body.walletConnectEnabled).toBe(true);
+    expect(body.walletConnectProjectId).toBe(fixture);
   });
 
   it("writes session revocation through the D1 argument", async () => {

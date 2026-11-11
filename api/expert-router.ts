@@ -118,7 +118,8 @@ export const expertRouter = createRouter({
     return db.select().from(expertProfiles).where(eq(expertProfiles.isActive, true)).orderBy(desc(expertProfiles.rating));
   }),
 
-  // Get application by ID
+  // Public by numeric id for /proverify/:id. Same residual as outreach.getCampaign:
+  // the result link is the capability, and the id is sequential.
   getApplication: publicQuery.input(z.object({ id: z.number() })).query(async ({ input }) => {
     const db = getDb();
     const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, input.id)).limit(1);

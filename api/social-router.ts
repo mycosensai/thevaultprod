@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
@@ -15,7 +16,7 @@ import {
 } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
-import { sanitizeForPrompt, logAudit, getClientIP } from "./security";
+import { sanitizeForPrompt, logAudit, getClientIP, canManageOwnedRow } from "./security";
 
 // ─── Reddit Public JSON API (no auth required) ───
 async function searchReddit(query: string): Promise<any[]> {
@@ -464,8 +465,24 @@ export const socialRouter = createRouter({
         contactMethod: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const [mention] = await db
+        .select()
+        .from(socialMediaMentions)
+        .where(eq(socialMediaMentions.id, input.mentionId))
+        .limit(1);
+      if (!mention) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Mention not found" });
+      }
+      const [search] = await db
+        .select()
+        .from(socialMediaSearches)
+        .where(eq(socialMediaSearches.id, mention.searchId))
+        .limit(1);
+      if (!canManageOwnedRow(ctx.user, search?.userId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
+      }
       await db
         .update(socialMediaMentions)
         .set({

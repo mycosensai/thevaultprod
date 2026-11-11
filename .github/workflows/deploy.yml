@@ -1,9 +1,10 @@
+# Live production deploys are Cloudflare Pages Git builds of project `thevault`
+# (production branch `main`). This workflow is manual only. Do not run it
+# until CLOUDFLARE_API_TOKEN is rotated; the previous token does not deploy
+# this project, and a push-triggered run would fight the Git integration.
 name: Deploy to Cloudflare Pages
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -39,4 +40,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
-          command: pages deploy dist --project-name thevault-77h --commit-hash ${{ github.sha }}
+          command: pages deploy dist --project-name thevault --commit-hash ${{ github.sha }}

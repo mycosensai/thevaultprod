@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { env } from "./lib/env";
 
 /** Minimal D1 (or D1-compatible) shape so security state can live in durable storage. */
@@ -419,17 +420,64 @@ export async function isUserSessionRevoked(userId: number, tokenIssuedAt: number
   return revokedAt ? tokenIssuedAt < revokedAt : false;
 }
 
-/** Checkout return URLs must pass validateUrl and match this request or the Vault host. */
-export function isCheckoutRedirectAllowed(url: string, request: Request): boolean {
-  const requestHost = (request.headers.get("host") || "").split(":")[0].trim().toLowerCase();
-  const vaultHost = env.vaultDomain
+const CANONICAL_CHECKOUT_HOSTS = ["thevaultdfw.win", "www.thevaultdfw.win"];
+
+function configuredVaultHost(): string {
+  return env.vaultDomain
     .replace(/^https?:\/\//, "")
     .split("/")[0]
     .split(":")[0]
     .trim()
     .toLowerCase();
-  const allowed = [requestHost, vaultHost, "thevaultdfw.win", "www.thevaultdfw.win"].filter((host) => host.length > 0);
-  return validateUrl(url, allowed);
+}
+
+/**
+ * Checkout return URLs must be https (in production) and land on the Vault
+ * host, the configured VAULT_DOMAIN, or the host this request was actually
+ * served on when that host is a Pages preview or local dev. The client Host
+ * header is ignored so it cannot widen the allowlist.
+ */
+export function isCheckoutRedirectAllowed(url: string, request: Request): boolean {
+  const allowed = new Set<string>(CANONICAL_CHECKOUT_HOSTS);
+  const configured = configuredVaultHost();
+  if (configured) allowed.add(configured);
+
+  let servedHost = "";
+  try {
+    servedHost = new URL(request.url).hostname.toLowerCase();
+  } catch {
+    servedHost = "";
+  }
+
+  const localDev = !env.isProduction && (servedHost === "localhost" || servedHost === "127.0.0.1");
+  const pagesPreview = servedHost.endsWith(".pages.dev");
+  if (servedHost && (allowed.has(servedHost) || localDev || pagesPreview)) {
+    allowed.add(servedHost);
+  }
+
+  return validateUrl(url, [...allowed]);
+}
+
+export function canManageOwnedRow(
+  user: { id: number; role: string },
+  ownerId: number | null | undefined,
+): boolean {
+  if (user.role === "admin") return true;
+  return typeof ownerId === "number" && ownerId === user.id;
+}
+
+const PUBLIC_AUTH_CODES = new Set(["BAD_REQUEST", "UNAUTHORIZED", "CONFLICT", "FORBIDDEN", "TOO_MANY_REQUESTS"]);
+
+/** Auth HTTP handlers may return safe tRPC messages. Everything else is generic. */
+export function publicAuthMessage(error: unknown): string {
+  if (!(error instanceof TRPCError) || !PUBLIC_AUTH_CODES.has(error.code)) {
+    return "Authentication failed";
+  }
+  const message = error.message.trim();
+  if (!message || message.length > 200 || message.includes("\n") || /at\s+\S+\s+\(/.test(message)) {
+    return "Authentication failed";
+  }
+  return message;
 }
 
 export function validateUrl(url: string, allowedHosts?: string[]): boolean {

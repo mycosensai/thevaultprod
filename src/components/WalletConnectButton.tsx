@@ -3,7 +3,6 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Wallet } from "lucide-react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
-import { walletConnectEnabled } from "@/lib/wagmi";
 
 function shortAddress(value: string) {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
@@ -74,8 +73,8 @@ export function WalletConnectButton({ compact = false }: { compact?: boolean }) 
                 {evmLabel(connector.id, connector.name)}
               </button>
             ))}
-            {!walletConnectEnabled && (
-              <p className="px-2 py-1 text-[10px] leading-relaxed text-[#8A6E2F]">WalletConnect stays off until a project id is set at build time.</p>
+            {!connectors.some((connector) => connector.id.toLowerCase().includes("walletconnect")) && (
+              <p className="px-2 py-1 text-[10px] leading-relaxed text-[#8A6E2F]">WalletConnect stays off until a project id is configured for this site.</p>
             )}
           </div>
           <p className="mt-3 mb-2 font-cinzel text-[8px] tracking-[3px] text-[#8A6E2F] uppercase">Solana</p>

@@ -18,7 +18,8 @@ import { setDb } from "../api/queries/connection";
 import { setCloudflareEnv, assertAppSecretConfigured } from "../api/lib/env";
 import { handleOAuthCallback } from "../api/oauth-handlers";
 import type { OAuthProvider } from "../api/oauth-providers";
-import { checkRateLimit, getSecurityHeaders, getCorsConfig } from "../api/security";
+import { checkRateLimit, getSecurityHeaders, getCorsConfig, publicAuthMessage } from "../api/security";
+import { walletConnectProjectIdOrEmpty } from "../contracts/walletconnect";
 
 type Env = Record<string, unknown> & {
   DB?: D1Database;
@@ -58,9 +59,12 @@ function getRequestContext(c: Context<{ Bindings: Env }>) {
   } as const;
 }
 
-function getPublicAuthError(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return "Authentication failed";
+function applyContextCookies(response: Response, resHeaders: Headers): Response {
+  const cookies = typeof resHeaders.getSetCookie === "function" ? resHeaders.getSetCookie() : [];
+  for (const cookie of cookies) {
+    response.headers.append("set-cookie", cookie);
+  }
+  return response;
 }
 
 function getEnvString(env: Env, name: string): string {
@@ -190,6 +194,16 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
+// Public client config. The project id is a Reown client identifier, not a
+// server secret. Non-matching values are dropped and never logged.
+app.get("/api/public-config", (c) => {
+  const walletConnectProjectId = walletConnectProjectIdOrEmpty(c.env.WALLETCONNECT_PROJECT_ID);
+  return c.json({
+    walletConnectEnabled: walletConnectProjectId.length > 0,
+    walletConnectProjectId,
+  });
+});
+
 // ─── Health ───
 app.get("/api/health", (c) =>
   c.json({
@@ -302,16 +316,17 @@ app.post("/api/auth/register", async (c) => {
     return c.json({ ok: false, error: "Invalid request body" }, 400);
   }
 
+  const context = getRequestContext(c);
   try {
-    const caller = appRouter.createCaller(await createContext(getRequestContext(c)));
+    const caller = appRouter.createCaller(await createContext(context));
     const result = await caller.localAuth.register({
       name: String(input.name || ""),
       email: String(input.email || ""),
       password: String(input.password || ""),
     });
-    return c.json({ ok: true, ...result });
+    return applyContextCookies(c.json({ ok: true, ...result }), context.resHeaders);
   } catch (error) {
-    return c.json({ ok: false, error: getPublicAuthError(error) }, 400);
+    return c.json({ ok: false, error: publicAuthMessage(error) }, 400);
   }
 });
 
@@ -323,15 +338,16 @@ app.post("/api/auth/login", async (c) => {
     return c.json({ ok: false, error: "Invalid request body" }, 400);
   }
 
+  const context = getRequestContext(c);
   try {
-    const caller = appRouter.createCaller(await createContext(getRequestContext(c)));
+    const caller = appRouter.createCaller(await createContext(context));
     const result = await caller.localAuth.login({
       email: String(input.email || ""),
       password: String(input.password || ""),
     });
-    return c.json({ ok: true, ...result });
+    return applyContextCookies(c.json({ ok: true, ...result }), context.resHeaders);
   } catch (error) {
-    return c.json({ ok: false, error: getPublicAuthError(error) }, 400);
+    return c.json({ ok: false, error: publicAuthMessage(error) }, 400);
   }
 });
 

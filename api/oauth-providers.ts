@@ -248,8 +248,8 @@ export async function exchangeCode(
   });
 
   if (!resp.ok) {
-    const text = await resp.text();
-    return { access_token: "", error: `Token exchange failed: ${text}` };
+    await resp.text();
+    return { access_token: "", error: `Token exchange failed (${resp.status})` };
   }
 
   const data = (await resp.json()) as { access_token?: string };

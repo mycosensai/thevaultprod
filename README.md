@@ -30,15 +30,15 @@ Reference tokens live in `contracts/reference-tokens.ts`. The defaults are AERO 
 
 ## Wallet connect
 
-The toolbar uses wagmi for EVM wallets and Solana wallet-adapter for Phantom, Solflare, and Backpack. MetaMask, Coinbase Wallet, Rainbow, and Phantom on EVM use injected connectors. WalletConnect is added only when a project id is present at build time.
+The toolbar uses wagmi for EVM wallets and Solana wallet-adapter for Phantom, Solflare, and Backpack. MetaMask, Coinbase Wallet, Rainbow, and Phantom on EVM use injected connectors. WalletConnect is added when `VITE_WALLETCONNECT_PROJECT_ID` is present at build time, or when Pages serves a 32-hex `WALLETCONNECT_PROJECT_ID` from `GET /api/public-config`. Injected wallets work without either.
 
 ## Deploy
 
-A push to `main` runs `.github/workflows/deploy.yml`. That job uses Node 22, builds `dist`, and runs `wrangler pages deploy dist --project-name thevault-77h`. The live domain is a CNAME to that Pages project. There is no second deploy workflow and no Worker `main` entry. Pages Functions stay in `functions/`.
+The live site is the Cloudflare Pages project `thevault` (not `thevault-77h`), built from Git on branch `main`. Pages Functions stay in `functions/`. There is no Worker `main` entry. `.github/workflows/deploy.yml` is manual only and targets `--project-name thevault`; do not run it until `CLOUDFLARE_API_TOKEN` is rotated.
 
-This app is not deployed to Vercel. Set these where the Pages build runs, because `VITE_` values are inlined by Vite. In GitHub Actions they are read from repository secrets of the same name:
+This app is not deployed to Vercel. `VITE_` values are inlined by Vite at build time. On the Pages project, set:
 
-- `VITE_WALLETCONNECT_PROJECT_ID` from https://cloud.reown.com if you want the WalletConnect QR option. Leave it empty to ship injected wallets only. Do not commit the id.
+- `VITE_WALLETCONNECT_PROJECT_ID` if the Git build should inline the Reown project id. A Pages secret named only `WALLETCONNECT_PROJECT_ID` is not visible to Vite; the Function reads that name at request time instead. Do not commit the id.
 - `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_STRIPE_PUBLISHABLE_KEY` for the existing sign-in and card checkout.
 - Server secrets stay in Cloudflare: `APP_SECRET`, `CLERK_SECRET_KEY`, `STRIPE_SECRET_KEY`, and the existing Solana treasury variables for direct checkout. Token launches do not add a server key.
 

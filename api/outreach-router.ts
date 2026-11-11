@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { createRouter, publicQuery, adminQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { outreachCampaigns, outreachLogs, professionalLeads } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { openaiChat, openaiStructured } from "./lib/openai";
+import { canManageOwnedRow } from "./security";
 
 // Pool of realistic expert archetypes for lead generation
 const expertArchetypes = [
@@ -199,7 +200,11 @@ export const outreachRouter = createRouter({
       };
     }),
 
-  /** Get campaign with all leads and logs */
+  /**
+   * Public by numeric id for the /leads result page and the ProVerify handoff.
+   * The result link is the capability. Ids are sequential, so this is an
+   * accepted product residual: do not add agent, admin, or password fields.
+   */
   getCampaign: publicQuery.input(z.object({ id: z.number() })).query(async ({ input }) => {
     const db = getDb();
     const [campaign] = await db.select().from(outreachCampaigns).where(eq(outreachCampaigns.id, input.id)).limit(1);
@@ -218,18 +223,22 @@ export const outreachRouter = createRouter({
     return db.select().from(outreachCampaigns).where(eq(outreachCampaigns.userId, ctx.user.id)).orderBy(desc(outreachCampaigns.createdAt)).limit(100);
   }),
 
-  /** Get leads for a listing or application */
-  getLeads: publicQuery
+  /**
+   * Listing-id lookup is not part of the public result page (that uses getCampaign).
+   * Require the lead owner or an admin so anonymous callers cannot enumerate emails.
+   */
+  getLeads: authedQuery
     .input(z.object({ listingId: z.number().optional(), applicationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      let rows: Array<typeof professionalLeads.$inferSelect> = [];
       if (input.listingId) {
-        return db.select().from(professionalLeads).where(eq(professionalLeads.listingId, input.listingId)).orderBy(desc(professionalLeads.createdAt)).limit(100);
+        rows = await db.select().from(professionalLeads).where(eq(professionalLeads.listingId, input.listingId)).orderBy(desc(professionalLeads.createdAt)).limit(100);
+      } else if (input.applicationId) {
+        rows = await db.select().from(professionalLeads).where(eq(professionalLeads.applicationId, input.applicationId)).orderBy(desc(professionalLeads.createdAt)).limit(100);
       }
-      if (input.applicationId) {
-        return db.select().from(professionalLeads).where(eq(professionalLeads.applicationId, input.applicationId)).orderBy(desc(professionalLeads.createdAt)).limit(100);
-      }
-      return [];
+      if (ctx.user.role === "admin") return rows;
+      return rows.filter((row) => canManageOwnedRow(ctx.user, row.userId));
     }),
 
   /** Deliver leads to user (mark as delivered) */

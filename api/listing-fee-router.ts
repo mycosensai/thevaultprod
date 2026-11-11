@@ -5,13 +5,15 @@
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
+import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, listingFees } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
 import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
 import { TRPCError } from "@trpc/server";
+import { paymentProviderError } from "./lib/stripe-error";
+import { canManageOwnedRow } from "./security";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -26,8 +28,8 @@ async function stripeFetch(endpoint: string, body?: URLSearchParams): Promise<an
     body: body?.toString(),
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Stripe API error: ${err}`);
+    await res.text();
+    throw paymentProviderError(res.status);
   }
   return res.json();
 }
@@ -131,7 +133,7 @@ export const listingFeeRouter = createRouter({
   /**
    * Verify listing fee payment from Stripe webhook or manual check
    */
-  verifyPayment: publicQuery
+  verifyPayment: authedQuery
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -150,6 +152,10 @@ export const listingFeeRouter = createRouter({
 
       if (!fee) {
         return { success: false, message: "Fee record not found" };
+      }
+
+      if (!canManageOwnedRow(ctx.user, fee.userId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
       }
 
       if (fee.status === "paid") {
@@ -190,9 +196,9 @@ export const listingFeeRouter = createRouter({
   /**
    * Check if a listing fee has been paid
    */
-  checkStatus: publicQuery
+  checkStatus: authedQuery
     .input(z.object({ listingId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
 
       const [fee] = await db
@@ -203,6 +209,10 @@ export const listingFeeRouter = createRouter({
 
       if (!fee) {
         return { paid: false, status: "not_found" };
+      }
+
+      if (!canManageOwnedRow(ctx.user, fee.userId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
       }
 
       return {

@@ -3,7 +3,7 @@ import { BASE_RPC_URLS } from "@contracts/public-rpc";
 import { createPublicClient, fallback, http, type Hex } from "viem";
 import { base } from "viem/chains";
 import { getWalletClient, switchChain } from "wagmi/actions";
-import { wagmiConfig } from "@/lib/wagmi";
+import { getWagmiConfig } from "@/lib/wagmi";
 
 export interface VaultLaunchRequest {
   chainId: number;
@@ -21,6 +21,7 @@ export async function launchVaultToken(launch: VaultLaunchRequest): Promise<Hex>
   if (launch.chainId !== BASE_CHAIN_ID) {
     throw new Error("Vault token launches are on Base.");
   }
+  const wagmiConfig = getWagmiConfig();
   await switchChain(wagmiConfig, { chainId: base.id });
   const walletClient = await getWalletClient(wagmiConfig, { chainId: base.id });
   if (!walletClient?.account) throw new Error("Connect a Base wallet before launching.");

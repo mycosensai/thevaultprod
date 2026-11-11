@@ -7,6 +7,7 @@ import { env } from "./lib/env";
 import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
 import { TRPCError } from "@trpc/server";
 import { markListingSold } from "./lib/inventory";
+import { paymentProviderError } from "./lib/stripe-error";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -21,8 +22,8 @@ async function stripeFetch(endpoint: string, body?: URLSearchParams, method: str
     body: body?.toString(),
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Stripe API error: ${text}`);
+    await res.text();
+    throw paymentProviderError(res.status);
   }
   return res.json();
 }
