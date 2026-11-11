@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { eq, desc, and, sql, count } from "drizzle-orm";
-import { createRouter, publicQuery, adminQuery } from "./middleware";
+import { createRouter, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   agentProjects,
@@ -404,13 +404,13 @@ async function executeCycle(
 // ─── TRPC ROUTER ───
 export const agentRouter = createRouter({
   // ── LIST PROJECTS ──
-  listProjects: publicQuery.query(async () => {
+  listProjects: adminQuery.query(async () => {
     const db = getDb();
     return db.select().from(agentProjects).orderBy(agentProjects.priority);
   }),
 
   // ── GET PROJECT DETAIL ──
-  getProject: publicQuery
+  getProject: adminQuery
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -444,7 +444,7 @@ export const agentRouter = createRouter({
     }),
 
   // ── LIST TASKS ──
-  listTasks: publicQuery
+  listTasks: adminQuery
     .input(z.object({ projectId: z.string(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -760,7 +760,7 @@ export const agentRouter = createRouter({
     }),
 
   // ── LIST SESSIONS ──
-  listSessions: publicQuery
+  listSessions: adminQuery
     .input(z.object({ projectId: z.string().optional(), limit: z.number().default(20) }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -780,7 +780,7 @@ export const agentRouter = createRouter({
     }),
 
   // ── GET CYCLES ──
-  listCycles: publicQuery
+  listCycles: adminQuery
     .input(z.object({
       projectId: z.string().optional(),
       sessionId: z.string().optional(),
@@ -812,7 +812,7 @@ export const agentRouter = createRouter({
     }),
 
   // ── GET LOGS ──
-  listLogs: publicQuery
+  listLogs: adminQuery
     .input(z.object({
       projectId: z.string().optional(),
       event: z.string().optional(),
@@ -847,7 +847,7 @@ export const agentRouter = createRouter({
     }),
 
   // ── FLEET OVERVIEW ──
-  fleetOverview: publicQuery.query(async () => {
+  fleetOverview: adminQuery.query(async () => {
     const db = getDb();
     const projects = await db.select().from(agentProjects).where(eq(agentProjects.active, true));
     const fleet = await db.select().from(agentFleetState);
@@ -886,7 +886,7 @@ export const agentRouter = createRouter({
   }),
 
   // ── DASHBOARD STATS ──
-  dashboardStats: publicQuery.query(async () => {
+  dashboardStats: adminQuery.query(async () => {
     const db = getDb();
     const [projects] = await db.select({ count: count() }).from(agentProjects);
     const [activeProjects] = await db
@@ -1052,7 +1052,7 @@ export const agentRouter = createRouter({
     }),
 
   // ── LIST MESSAGES ──
-  listMessages: publicQuery
+  listMessages: adminQuery
     .input(z.object({
       projectId: z.string(),
       processed: z.boolean().optional(),

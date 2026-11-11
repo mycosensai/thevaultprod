@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { outreachCampaigns, outreachLogs, professionalLeads } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -246,7 +246,7 @@ export const outreachRouter = createRouter({
     }),
 
   /** Get stats for dashboard */
-  stats: publicQuery.query(async () => {
+  stats: adminQuery.query(async () => {
     const db = getDb();
     const campaigns = await db.select().from(outreachCampaigns);
     const allLeads = await db.select().from(professionalLeads);

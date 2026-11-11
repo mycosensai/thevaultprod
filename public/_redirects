@@ -1,2 +1,4 @@
-/* /index.html 200
+/robots.txt /robots.txt 200
+/sitemap.xml /sitemap.xml 200
 /api/* /api/:splat 200
+/* /index.html 200

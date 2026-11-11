@@ -15,7 +15,6 @@ const navLinks = [
   { label: 'ProVerify', path: '/proverify' },
   { label: 'Sell', path: '/sell' },
   { label: 'Tokens', path: '/token-gallery' },
-  { label: 'Agents', path: '/agents' },
   { label: 'Support', path: '/support' },
 ]
 
@@ -25,7 +24,6 @@ const footerPlatform = [
   { label: 'ProVerify', path: '/proverify' },
   { label: 'Sell an Item', path: '/sell' },
   { label: 'Token Gallery', path: '/token-gallery' },
-  { label: 'Agent Fleet', path: '/agents' },
   { label: 'Wishlist', path: '/wishlist' },
   { label: 'My Orders', path: '/orders' },
 ]

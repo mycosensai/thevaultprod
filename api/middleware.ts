@@ -2,9 +2,16 @@ import { ErrorMessages } from "@contracts/constants";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { env } from "./lib/env";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter({ shape }) {
+    if (!env.isProduction) return shape;
+    const data = { ...shape.data };
+    delete data.stack;
+    return { ...shape, data };
+  },
 });
 
 export const createRouter = t.router;

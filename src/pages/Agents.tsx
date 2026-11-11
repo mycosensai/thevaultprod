@@ -36,9 +36,9 @@ export default function Agents() {
   const { isAdmin } = useAuth();
   const utils = trpc.useContext();
 
-  const { data: stats } = trpc.agent.dashboardStats.useQuery();
-  const { data: fleet } = trpc.agent.fleetOverview.useQuery();
-  const { data: sessions } = trpc.agent.listSessions.useQuery({ limit: 10 });
+  const { data: stats } = trpc.agent.dashboardStats.useQuery(undefined, { enabled: isAdmin });
+  const { data: fleet } = trpc.agent.fleetOverview.useQuery(undefined, { enabled: isAdmin });
+  const { data: sessions } = trpc.agent.listSessions.useQuery({ limit: 10 }, { enabled: isAdmin });
   const seedProjects = trpc.agent.seedProjects.useMutation({
     onSuccess: () => { utils.agent.dashboardStats.invalidate(); utils.agent.fleetOverview.invalidate(); }
   });

@@ -4,7 +4,8 @@ import { getDb } from "./queries/connection";
 import { listings, stripeSessions } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { env } from "./lib/env";
-import { logAudit, getClientIP } from "./security";
+import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
+import { TRPCError } from "@trpc/server";
 import { markListingSold } from "./lib/inventory";
 
 const STRIPE_API = "https://api.stripe.com/v1";
@@ -42,6 +43,9 @@ export const stripeRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      if (!isCheckoutRedirectAllowed(input.successUrl, ctx.req) || !isCheckoutRedirectAllowed(input.cancelUrl, ctx.req)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Checkout redirect URL is not allowed" });
+      }
       const db = getDb();
       const [listing] = await db.select().from(listings).where(eq(listings.id, input.listingId)).limit(1);
       if (!listing) throw new Error("Listing not found");

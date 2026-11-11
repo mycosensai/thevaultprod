@@ -209,19 +209,10 @@ app.get("/api/db/health", async (c) => {
   }
 
   try {
-    const result = await db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name LIMIT 100")
-      .all();
-
-    return c.json({ ok: true, tables: result.results ?? [] });
-  } catch (err) {
-    return c.json(
-      {
-        ok: false,
-        error: err instanceof Error ? err.message : "D1 query failed",
-      },
-      500,
-    );
+    await db.prepare("SELECT 1 as ok").first();
+    return c.json({ ok: true });
+  } catch {
+    return c.json({ ok: false, error: "D1 query failed" }, 500);
   }
 });
 

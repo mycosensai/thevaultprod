@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router'
 import { Suspense, lazy } from 'react'
 import Layout from './components/Layout'
 import MobileAppPrompt from './components/MobileAppPrompt'
+import { AdminOnly } from './components/AdminOnly'
 
 const Home = lazy(() => import('./pages/Home'))
 const Storefront = lazy(() => import('./pages/Storefront'))
@@ -70,7 +71,7 @@ export default function App() {
             <Route path="/proverify" element={<ProVerify />} />
             <Route path="/proverify/:id" element={<ProVerifyResult />} />
             <Route path="/leads/:id" element={<Leads />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin" element={<AdminOnly><Admin /></AdminOnly>} />
             <Route path="/about" element={<About />} />
             <Route path="/faq" element={<FAQ />} />
             <Route path="/terms" element={<Terms />} />
@@ -83,9 +84,9 @@ export default function App() {
             <Route path="/social-leads/:listingId" element={<SocialLeads />} />
             <Route path="/sale" element={<SaleManager />} />
             <Route path="/sale/:id" element={<SaleManager />} />
-            <Route path="/agents" element={<Agents />} />
-            <Route path="/agents/:projectId" element={<AgentProject />} />
-            <Route path="/admin/agents" element={<Agents />} />
+            <Route path="/agents" element={<AdminOnly><Agents /></AdminOnly>} />
+            <Route path="/agents/:projectId" element={<AdminOnly><AgentProject /></AdminOnly>} />
+            <Route path="/admin/agents" element={<AdminOnly><Agents /></AdminOnly>} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<NotFound />} />
           </Route>

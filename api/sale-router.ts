@@ -11,12 +11,13 @@
  */
 
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
+import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, saleTransactions, sellerPayouts, commissionTiers } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { env } from "./lib/env";
-import { logAudit, getClientIP } from "./security";
+import { logAudit, getClientIP, isCheckoutRedirectAllowed } from "./security";
+import { TRPCError } from "@trpc/server";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -143,6 +144,9 @@ export const saleRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      if (!isCheckoutRedirectAllowed(input.successUrl, ctx.req) || !isCheckoutRedirectAllowed(input.cancelUrl, ctx.req)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Checkout redirect URL is not allowed" });
+      }
       const db = getDb();
 
       const [sale] = await db

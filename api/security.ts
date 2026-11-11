@@ -419,6 +419,19 @@ export async function isUserSessionRevoked(userId: number, tokenIssuedAt: number
   return revokedAt ? tokenIssuedAt < revokedAt : false;
 }
 
+/** Checkout return URLs must pass validateUrl and match this request or the Vault host. */
+export function isCheckoutRedirectAllowed(url: string, request: Request): boolean {
+  const requestHost = (request.headers.get("host") || "").split(":")[0].trim().toLowerCase();
+  const vaultHost = env.vaultDomain
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    .split(":")[0]
+    .trim()
+    .toLowerCase();
+  const allowed = [requestHost, vaultHost, "thevaultdfw.win", "www.thevaultdfw.win"].filter((host) => host.length > 0);
+  return validateUrl(url, allowed);
+}
+
 export function validateUrl(url: string, allowedHosts?: string[]): boolean {
   try {
     const parsed = new URL(url);

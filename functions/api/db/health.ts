@@ -19,18 +19,9 @@ export const onRequestGet = async (context: PagesContext) => {
   }
 
   try {
-    const result = await db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name LIMIT 100")
-      .all();
-
-    return Response.json({ ok: true, tables: result.results ?? [] });
-  } catch (error) {
-    return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "D1 query failed",
-      },
-      { status: 500 },
-    );
+    await db.prepare("SELECT 1 as ok").first();
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json({ ok: false, error: "D1 query failed" }, { status: 500 });
   }
 };
