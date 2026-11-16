@@ -23,6 +23,7 @@ import { saleRouter } from "./sale-router";
 import { emailRouter } from "./email-router";
 import { partnershipRouter } from "./partnership-router";
 import { internetResearchRouter } from "./internet-research-router";
+import { supportRouter } from "./support-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -52,6 +53,7 @@ export const appRouter = createRouter({
   email: emailRouter,
   partnership: partnershipRouter,
   research: internetResearchRouter,
+  support: supportRouter,
 });
 
 export type AppRouter = typeof appRouter;

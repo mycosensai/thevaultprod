@@ -1,4 +1,6 @@
 /robots.txt /robots.txt 200
 /sitemap.xml /sitemap.xml 200
 /api/* /api/:splat 200
+/shop /browse 301
+/signup /login?mode=register 301
 /* /index.html 200

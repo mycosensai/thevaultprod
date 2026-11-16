@@ -3,6 +3,7 @@ import * as schema from "@db/schema";
 import type { D1Like } from "../security";
 
 let rawD1: D1Like | null = null;
+let dbInstance: ReturnType<typeof drizzle> | null = null;
 
 export function setDb(d1: D1Like | null | undefined) {
   rawD1 = d1 ?? null;

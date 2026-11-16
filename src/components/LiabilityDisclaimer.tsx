@@ -37,7 +37,7 @@ export function FooterDisclaimer() {
           {' '}
           <Link to="/support" className="text-[#C9A84C] hover:underline">Contact Support</Link>
           {' | '}
-          <Link to="/support" className="text-[#C9A84C] hover:underline">ratchetkrewelabs@gmail.com</Link>
+          <a href="mailto:ratchetkrewelabs@gmail.com" className="text-[#C9A84C] hover:underline">ratchetkrewelabs@gmail.com</a>
         </p>
       </div>
     </div>

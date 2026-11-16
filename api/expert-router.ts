@@ -1,6 +1,9 @@
 // @ts-nocheck
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
+import { openRecordId, sealRecordId } from "./lib/capability-token";
+import { CAPABILITY_TOKEN_PATTERN } from "../src/lib/capability-token";
 import { getDb } from "./queries/connection";
 import { expertProfiles, expertApplications, expertReviews, expertConsensus, outreachCampaigns } from "@db/schema";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
@@ -99,12 +102,12 @@ export const expertRouter = createRouter({
 
       return {
         success: true,
-        applicationId: appId,
+        applicationId: await sealRecordId("expert", appId),
         status: assignedIds.length > 0 ? "assigned" : "submitted",
         assignedExpertCount: assignedIds.length,
         matchedExperts: matchedExperts.map((e) => ({ id: e.id, name: e.name, title: e.title, institution: e.institution })),
         reviewFee,
-        outreachCampaignId: outreachId,
+        outreachCampaignId: await sealRecordId("outreach", outreachId),
         initialLeads: roundResult.leadsFound,
         outreachMessage: roundResult.leadsFound > 0
           ? `AI outreach started! Found ${roundResult.leadsFound} initial lead(s). Working around the clock to find more.`
@@ -118,11 +121,12 @@ export const expertRouter = createRouter({
     return db.select().from(expertProfiles).where(eq(expertProfiles.isActive, true)).orderBy(desc(expertProfiles.rating));
   }),
 
-  // Public by numeric id for /proverify/:id. Same residual as outreach.getCampaign:
-  // the result link is the capability, and the id is sequential.
-  getApplication: publicQuery.input(z.object({ id: z.number() })).query(async ({ input }) => {
+  // Public by sealed id. Sequential integers are rejected.
+  getApplication: publicQuery.input(z.object({ id: z.string().regex(CAPABILITY_TOKEN_PATTERN) })).query(async ({ input }) => {
     const db = getDb();
-    const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, input.id)).limit(1);
+    const applicationId = await openRecordId("expert", input.id);
+    if (!applicationId) return null;
+    const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, applicationId)).limit(1);
     if (!app) return null;
     // Get matched experts
     const expertIds = (app.assignedExpertIds as number[]) || [];
@@ -142,11 +146,13 @@ export const expertRouter = createRouter({
   }),
 
   // AI-powered expert review simulation
-  runExpertReview: publicQuery.input(z.object({ applicationId: z.number() })).mutation(async ({ input }) => {
+  runExpertReview: publicQuery.input(z.object({ id: z.string().regex(CAPABILITY_TOKEN_PATTERN) })).mutation(async ({ input }) => {
     const db = getDb();
+    const applicationId = await openRecordId("expert", input.id);
+    if (!applicationId) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found" });
 
-    const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, input.applicationId)).limit(1);
-    if (!app) throw new Error("Application not found");
+    const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, applicationId)).limit(1);
+    if (!app) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found" });
 
     const expertIds = (app.assignedExpertIds as number[]) || [];
     if (expertIds.length === 0) throw new Error("No experts assigned");
@@ -272,11 +278,13 @@ Be thorough and professional. Base your assessment on realistic market data.`;
   }),
 
   // Generate consensus from all reviews
-  generateConsensus: publicQuery.input(z.object({ applicationId: z.number() })).mutation(async ({ input }) => {
+  generateConsensus: publicQuery.input(z.object({ id: z.string().regex(CAPABILITY_TOKEN_PATTERN) })).mutation(async ({ input }) => {
     const db = getDb();
+    const applicationId = await openRecordId("expert", input.id);
+    if (!applicationId) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found" });
 
-    const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, input.applicationId)).limit(1);
-    if (!app) throw new Error("Application not found");
+    const [app] = await db.select().from(expertApplications).where(eq(expertApplications.id, applicationId)).limit(1);
+    if (!app) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found" });
 
     const reviews = await db.select().from(expertReviews).where(eq(expertReviews.applicationId, app.id));
     if (reviews.length === 0) throw new Error("No reviews yet");

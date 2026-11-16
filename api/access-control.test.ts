@@ -43,6 +43,7 @@ describe("internal API access", () => {
     await expect(caller.listingFee.checkStatus({ listingId: 1 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(caller.outreach.getLeads({ listingId: 1 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(caller.social.updateMentionStatus({ mentionId: 1, status: "contacted" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(caller.support.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("rejects a signed-in non-admin from agent ops", async () => {
@@ -50,6 +51,7 @@ describe("internal API access", () => {
     await expect(caller.agent.dashboardStats()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.agent.fleetOverview()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.agent.listSessions({ limit: 5 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.support.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("omits stacks from production tRPC errors", async () => {

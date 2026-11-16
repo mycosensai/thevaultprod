@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { trpc } from '@/providers/trpc'
 import {
   Diamond, Users, ShoppingBag, BarChart3, Activity,
-  Loader2, ArrowLeft, TrendingUp, DollarSign, Package
+  Loader2, ArrowLeft, TrendingUp, DollarSign, Package, Mail
 } from 'lucide-react'
 
 export default function Admin() {
@@ -18,6 +18,9 @@ export default function Admin() {
   }, [isAuthenticated, isAdmin, authLoading, navigate])
 
   const { data: stats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
+    enabled: isAdmin,
+  })
+  const { data: tickets } = trpc.support.list.useQuery(undefined, {
     enabled: isAdmin,
   })
 
@@ -74,6 +77,28 @@ export default function Admin() {
               <div className="text-[8px] tracking-[2px] uppercase text-[#8A6E2F]">{card.label}</div>
             </div>
           ))}
+        </div>
+
+        <div className="bg-[#161616] border border-[#C9A84C]/15 p-6 mb-10">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-cinzel text-xs font-semibold tracking-[3px] text-[#C9A84C] uppercase">Support tickets</h2>
+            <Mail className="w-4 h-4 text-[#8A6E2F]" />
+          </div>
+          <div className="space-y-3">
+            {(tickets || []).map((ticket) => (
+              <div key={ticket.id} className="p-3 bg-[#1E1E1E] border border-[#C9A84C]/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-[#F5EED8]">{ticket.name}</p>
+                  <p className="text-[10px] uppercase tracking-[2px] text-[#C9A84C]">{ticket.topic}</p>
+                </div>
+                <a href={`mailto:${ticket.email}`} className="text-[10px] text-[#C9A84C] hover:underline break-all">{ticket.email}</a>
+                <p className="mt-2 text-[11px] text-[#C8BC98] whitespace-pre-wrap break-words">{ticket.message}</p>
+              </div>
+            ))}
+            {(!tickets || tickets.length === 0) && (
+              <p className="text-xs text-[#8A6E2F] text-center py-6">No tickets yet</p>
+            )}
+          </div>
         </div>
 
         {/* Recent Listings */}
