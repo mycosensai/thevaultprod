@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { trpc } from '@/providers/trpc'
 import {
   Diamond, LogIn, Loader2, UserPlus, ArrowLeft, Eye, EyeOff
@@ -83,7 +83,8 @@ function ProviderButton({
 }
 
 export default function Login() {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<'login' | 'register'>(searchParams.get('mode') === 'register' ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')

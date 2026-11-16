@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router'
+import { isCapabilityToken } from '@/lib/capability-token'
 import { useState } from 'react'
 import { trpc } from '@/providers/trpc'
 import {
@@ -37,9 +38,12 @@ function ScoreRing({ score, label, color }: { score: number; label: string; colo
 
 export default function ProVerifyResult() {
   const { id } = useParams<{ id: string }>()
-  const appId = parseInt(id || '0')
+  const token = isCapabilityToken(id) ? id : ""
 
-  const { data: app, isLoading } = trpc.expert.getApplication.useQuery({ id: appId }, { refetchInterval: 5000 })
+  const { data: app, isLoading } = trpc.expert.getApplication.useQuery(
+    { id: token },
+    { enabled: Boolean(token), refetchInterval: token ? 5000 : false },
+  )
   const [runningReview, setRunningReview] = useState(false)
 
   const runReview = trpc.expert.runExpertReview.useMutation({ onSuccess: () => setRunningReview(false) })
@@ -51,11 +55,11 @@ export default function ProVerifyResult() {
 
   const handleRunReview = () => {
     setRunningReview(true)
-    runReview.mutate({ applicationId: appId })
+    runReview.mutate({ id: token })
   }
 
   const handleConsensus = () => {
-    generateConsensus.mutate({ applicationId: appId })
+    generateConsensus.mutate({ id: token })
   }
 
   if (isLoading) return <div className="min-h-screen pt-32 flex justify-center"><Loader2 className="w-8 h-8 text-[#C9A84C] animate-spin" /></div>

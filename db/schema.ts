@@ -396,6 +396,17 @@ export const newsletterSubscribers = sqliteTable("newsletter_subscribers", {
 });
 export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
 
+export const supportRequests = sqliteTable("support_requests", {
+  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  topic: text("topic").notNull(),
+  message: text("message").notNull(),
+  userId: integer("user_id"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+});
+export type SupportRequest = typeof supportRequests.$inferSelect;
+
 // ─── RECENTLY VIEWED ───
 export const recentlyViewed = sqliteTable("recently_viewed", {
   id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
@@ -561,7 +572,7 @@ export const listingFees = sqliteTable("listing_fees", {
   userId: integer("user_id").notNull(),
   listingId: integer("listing_id"),
   stripeSessionId: text("stripe_session_id"),
-  amount: text("amount").default("20.00").notNull(),
+  amount: text("amount").default("0.00").notNull(),
   status: text("status").default("pending").notNull(),
   paidAt: integer("paid_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),

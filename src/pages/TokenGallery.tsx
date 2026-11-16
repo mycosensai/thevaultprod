@@ -56,7 +56,7 @@ export default function TokenGallery() {
             <div className="h-px w-12 bg-gradient-to-l from-transparent to-[#C9A84C]" />
           </div>
           <p className="mx-auto max-w-xl font-cormorant text-base text-[#C8BC98] italic">
-            Vault launches sit beside {REFERENCE_TOKENS.map((token) => token.symbol).join(" and ")}. Prices are read from public Base DEX pools.
+            Vault launches sit beside {REFERENCE_TOKENS.map((token) => token.symbol).join(" and ")}. Prices are read from Base pools, then a public market feed if a pool quote does not return.
           </p>
         </div>
 
@@ -136,7 +136,7 @@ export default function TokenGallery() {
             <p className="mt-1 text-[10px] text-[#C8BC98]">Solana wallet {market.data.solana.address.slice(0, 4)}…{market.data.solana.address.slice(-4)} holds {market.data.solana.sol} SOL.</p>
           )}
           {market.error && (
-            <p className="mt-3 text-[11px] text-[#C8BC98]">Quotes are unavailable until the public RPC route answers. The table stays in place.</p>
+            <p className="mt-3 text-[11px] text-[#C8BC98]">Quotes are unavailable until a Base RPC or the market feed answers. The table stays in place.</p>
           )}
           {market.data?.notes.map((note) => (
             <p key={note} className="mt-1 text-[10px] text-[#8A6E2F]">{note}</p>

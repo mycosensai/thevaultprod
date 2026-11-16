@@ -22,13 +22,33 @@ export default function Certificate() {
   }
 
   const downloadCertificate = () => {
-    if (!certRef.current) return
-    const content = certRef.current.innerText
-    const blob = new Blob([content], { type: 'text/plain' })
+    if (!cert) return
+    const certifiedOn = cert.createdAt
+      ? new Date(cert.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : 'N/A'
+    const network = cert.network === 'ethereum_sepolia' ? 'Ethereum Sepolia' : cert.network
+    const content = [
+      'THE VAULT DFW',
+      'Certificate of Authenticity',
+      '',
+      `Item: ${cert.itemName || ''}`,
+      `Network: ${network || ''}`,
+      `Contract address: ${cert.contractAddress || ''}`,
+      `Token ID: ${cert.tokenId ?? ''}`,
+      `Block hash: ${cert.blockHash || ''}`,
+      `Block number: ${cert.blockNumber ?? ''}`,
+      `Certificate hash: ${cert.certificateHash || ''}`,
+      `Certified on: ${certifiedOn}`,
+      '',
+      'This certificate records the item against the blockchain transaction named above.',
+      'The Vault does not custody the item or the wallet that signed the launch.',
+    ].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Vault-Certificate-${cert?.certificateHash?.slice(0, 16)}.txt`
+    const hash = cert.certificateHash ? cert.certificateHash.slice(0, 16) : `record-${cert.id}`
+    a.download = `Vault-Certificate-${hash}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }

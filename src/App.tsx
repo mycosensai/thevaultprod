@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router'
+import { Navigate, Routes, Route } from 'react-router'
 import { Suspense, lazy } from 'react'
 import Layout from './components/Layout'
 import MobileAppPrompt from './components/MobileAppPrompt'
@@ -88,6 +88,8 @@ export default function App() {
             <Route path="/agents/:projectId" element={<AdminOnly><AgentProject /></AdminOnly>} />
             <Route path="/admin/agents" element={<AdminOnly><Agents /></AdminOnly>} />
             <Route path="/login" element={<Login />} />
+            <Route path="/shop" element={<Navigate to="/browse" replace />} />
+            <Route path="/signup" element={<Navigate to="/login?mode=register" replace />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

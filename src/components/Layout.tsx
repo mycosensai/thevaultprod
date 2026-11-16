@@ -55,26 +55,6 @@ function SocialIcon({ href, children }: { href: string; children: React.ReactNod
   )
 }
 
-// X (Twitter) icon
-function XSocialIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  )
-}
-
-// Instagram icon
-function InstagramIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-    </svg>
-  )
-}
-
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -111,7 +91,7 @@ export default function Layout() {
               <span className="font-cinzel text-lg lg:text-xl font-bold tracking-[4px] text-[#C9A84C] hidden sm:block">THE VAULT</span>
             </Link>
 
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden xl:flex items-center gap-6">
               {navLinks.map((link) => (
                 <Link key={link.path} to={link.path}
                   className={`text-[10px] tracking-[3px] uppercase transition-colors ${
@@ -122,7 +102,7 @@ export default function Layout() {
               ))}
             </div>
 
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden xl:flex items-center gap-3 shrink-0">
               <Link to="/browse" className="text-[#C8BC98] hover:text-[#C9A84C] transition-colors" title="Search">
                 <Search className="w-4 h-4" />
               </Link>
@@ -162,14 +142,17 @@ export default function Layout() {
               )}
             </div>
 
-            <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden text-[#C9A84C]">
-              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+            <div className="flex shrink-0 items-center gap-2 xl:hidden">
+              <WalletConnectButton iconOnly />
+              <button onClick={() => setMenuOpen(!menuOpen)} className="text-[#C9A84C]" aria-label={menuOpen ? "Close menu" : "Open menu"}>
+                {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
 
         {menuOpen && (
-          <div className="md:hidden bg-[#080808]/98 backdrop-blur-xl border-t border-[#C9A84C]/20">
+          <div className="xl:hidden bg-[#080808]/98 backdrop-blur-xl border-t border-[#C9A84C]/20">
             <div className="px-4 py-6 space-y-1">
               {navLinks.map((link) => (
                 <Link key={link.path} to={link.path} className="block text-sm tracking-[3px] uppercase text-[#C8BC98] hover:text-[#E8CB7A] py-2.5 transition-colors">
@@ -246,12 +229,6 @@ export default function Layout() {
               </p>
               {/* Social Media */}
               <div className="flex gap-2">
-                <SocialIcon href="https://x.com/thevault">
-                  <XSocialIcon />
-                </SocialIcon>
-                <SocialIcon href="https://instagram.com/thevault">
-                  <InstagramIcon />
-                </SocialIcon>
                 <SocialIcon href="mailto:ratchetkrewelabs@gmail.com">
                   <Mail className="w-3.5 h-3.5" />
                 </SocialIcon>

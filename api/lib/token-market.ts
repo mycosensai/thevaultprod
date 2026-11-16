@@ -308,6 +308,49 @@ export interface VaultTokenRef {
   name: string;
 }
 
+async function quoteDexScreener(address: string): Promise<{
+  priceUsd: number;
+  fdvUsd: number | null;
+  liquidityUsd: number | null;
+  change24hPct: number | null;
+  pool: string | null;
+  poolProtocol: null;
+  totalSupply: null;
+  decimals: null;
+} | null> {
+  const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(4_000),
+  });
+  if (!response.ok) return null;
+  const body = (await response.json()) as {
+    pairs?: Array<{
+      chainId?: string;
+      pairAddress?: string;
+      priceUsd?: string;
+      fdv?: number;
+      liquidity?: { usd?: number };
+      priceChange?: { h24?: number };
+    }>;
+  };
+  const pair = (body.pairs ?? [])
+    .filter((item) => item.chainId === "base" && item.priceUsd)
+    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+  if (!pair?.priceUsd) return null;
+  const priceUsd = Number(pair.priceUsd);
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0) return null;
+  return {
+    priceUsd,
+    fdvUsd: typeof pair.fdv === "number" ? pair.fdv : null,
+    liquidityUsd: typeof pair.liquidity?.usd === "number" ? pair.liquidity.usd : null,
+    change24hPct: typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : null,
+    pool: pair.pairAddress ?? null,
+    poolProtocol: null,
+    totalSupply: null,
+    decimals: null,
+  };
+}
+
 function emptyQuote(target: { address: string; symbol: string; name: string; kind: "reference" | "vault" }, error: string): QuotedToken {
   return {
     address: target.address,
@@ -340,13 +383,20 @@ export async function quoteMarkets(input: { wallet?: string; solanaWallet?: stri
     ...REFERENCE_TOKENS.map((token) => ({ ...token, kind: "reference" as const })),
     ...input.vaultTokens.map((token) => ({ ...token, kind: "vault" as const, decimals: 18 })),
   ];
-  const tokens: QuotedToken[] = [];
-  for (const target of targets) {
+  const tokens = await Promise.all(targets.map(async (target): Promise<QuotedToken> => {
     try {
-      const quote = await cached(`quote:${target.address.toLowerCase()}:${eth ?? "noeth"}`, 45_000, async () => {
-        if (eth === null) return null;
-        return (await quoteUniswap(target.address, target.decimals, eth)) ?? (await quoteAerodrome(target.address, target.decimals, eth));
-      });
+      const dexPromise = cached(`dex:${target.address.toLowerCase()}`, 45_000, () => quoteDexScreener(target.address));
+      const chainPromise = eth === null
+        ? Promise.resolve(null)
+        : cached(`quote:${target.address.toLowerCase()}:${eth}`, 45_000, async () => {
+            return (await quoteUniswap(target.address, target.decimals, eth as number)) ?? (await quoteAerodrome(target.address, target.decimals, eth as number));
+          }).catch(() => null);
+      const onChain = await Promise.race([
+        chainPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_500)),
+      ]);
+      const quote = onChain ?? await dexPromise;
+      if (!onChain && quote) notes.push(`${target.symbol} price came from the public market feed.`);
       let holding: string | null = null;
       if (input.wallet && quote?.decimals != null) {
         try {
@@ -355,7 +405,7 @@ export async function quoteMarkets(input: { wallet?: string; solanaWallet?: stri
           holding = null;
         }
       }
-      tokens.push({
+      return {
         address: getAddress(target.address),
         symbol: target.symbol,
         name: target.name,
@@ -369,12 +419,12 @@ export async function quoteMarkets(input: { wallet?: string; solanaWallet?: stri
         totalSupply: quote?.totalSupply ?? null,
         decimals: quote?.decimals ?? null,
         holding,
-        error: quote ? null : "No Uniswap v3 or Aerodrome pool was readable.",
-      });
+        error: quote ? null : "No Base pool or market feed returned a price.",
+      };
     } catch {
-      tokens.push(emptyQuote(target, "Public RPC quote failed."));
+      return emptyQuote(target, "Public RPC quote failed.");
     }
-  }
+  }));
 
   let solana: { address: string; lamports: string; sol: string } | null = null;
   if (input.solanaWallet) {

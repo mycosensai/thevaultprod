@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { listings, orders } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
+import { ORDER_STATUSES, orderUpdateDenial } from "./lib/order-access";
 
 export const ordersRouter = createRouter({
   list: publicQuery.query(async ({ ctx }) => {
@@ -65,17 +67,8 @@ export const ordersRouter = createRouter({
         paymentStatus: z
           .enum(["pending", "completed", "failed", "refunded"])
           .optional(),
-        orderStatus: z
-          .enum([
-            "pending",
-            "confirmed",
-            "shipped",
-            "delivered",
-            "cancelled",
-            "refunded",
-          ])
-          .optional(),
-        trackingNumber: z.string().optional(),
+        orderStatus: z.enum(ORDER_STATUSES).optional(),
+        trackingNumber: z.string().max(80).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -85,31 +78,35 @@ export const ordersRouter = createRouter({
         .from(orders)
         .where(eq(orders.id, input.orderId))
         .limit(1);
-      if (!order) throw new Error("Order not found");
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
 
-      const isAdmin = ctx.user.role === "admin";
-      const isOwner = order.userId === ctx.user.id;
-      if (!isAdmin && !isOwner) throw new Error("Forbidden");
+      const [listing] = await db
+        .select({ sellerId: listings.sellerId })
+        .from(listings)
+        .where(eq(listings.id, order.listingId))
+        .limit(1);
 
-      const updateData: any = {};
-      // Payment status is payment-system-authoritative: admin only.
-      if (input.paymentStatus) {
-        if (!isAdmin) throw new Error("Forbidden");
-        updateData.paymentStatus = input.paymentStatus;
-      }
-      if (input.orderStatus) {
-        // Order state machine: the buyer/order owner may only advance the
-        // order once payment has completed (server-side check — money state
-        // gates fulfilment state). Admins may always correct status.
-        if (!isAdmin && order.paymentStatus !== "completed") {
-          throw new Error(
-            "Forbidden: order status cannot advance before payment is completed"
-          );
-        }
-        updateData.orderStatus = input.orderStatus;
-      }
-      if (input.trackingNumber)
-        updateData.trackingNumber = input.trackingNumber;
+      const denial = orderUpdateDenial({
+        actorId: ctx.user.id,
+        actorRole: ctx.user.role,
+        order: {
+          userId: order.userId,
+          paymentStatus: order.paymentStatus,
+          orderStatus: order.orderStatus,
+        },
+        sellerId: listing?.sellerId ?? null,
+        next: {
+          paymentStatus: input.paymentStatus,
+          orderStatus: input.orderStatus,
+          trackingNumber: input.trackingNumber,
+        },
+      });
+      if (denial) throw new TRPCError({ code: "FORBIDDEN", message: denial });
+
+      const updateData: Record<string, string> = {};
+      if (input.paymentStatus) updateData.paymentStatus = input.paymentStatus;
+      if (input.orderStatus) updateData.orderStatus = input.orderStatus;
+      if (input.trackingNumber?.trim()) updateData.trackingNumber = input.trackingNumber.trim();
 
       if (Object.keys(updateData).length === 0) return { success: true };
 

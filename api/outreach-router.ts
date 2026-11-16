@@ -1,5 +1,8 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
+import { openRecordId, sealRecordId } from "./lib/capability-token";
+import { CAPABILITY_TOKEN_PATTERN } from "../src/lib/capability-token";
 import { getDb } from "./queries/connection";
 import { outreachCampaigns, outreachLogs, professionalLeads } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -170,10 +173,11 @@ export const outreachRouter = createRouter({
       // Run first outreach round immediately
       const [campaign] = await db.select().from(outreachCampaigns).where(eq(outreachCampaigns.id, campaignId)).limit(1);
       const roundResult = await runOutreachRound(campaign, db);
+      const publicId = await sealRecordId("outreach", campaignId);
 
       return {
         success: true,
-        campaignId,
+        campaignId: publicId,
         leadsFound: roundResult.leadsFound,
         status: roundResult.leadsFound >= input.targetLeads ? "completed" : "running",
         message: roundResult.leadsFound >= input.targetLeads
@@ -184,11 +188,13 @@ export const outreachRouter = createRouter({
 
   /** Run next outreach round on a campaign */
   runNextRound: publicQuery
-    .input(z.object({ campaignId: z.number() }))
+    .input(z.object({ id: z.string().regex(CAPABILITY_TOKEN_PATTERN) }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const [campaign] = await db.select().from(outreachCampaigns).where(eq(outreachCampaigns.id, input.campaignId)).limit(1);
-      if (!campaign) throw new Error("Campaign not found");
+      const campaignId = await openRecordId("outreach", input.id);
+      if (!campaignId) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+      const [campaign] = await db.select().from(outreachCampaigns).where(eq(outreachCampaigns.id, campaignId)).limit(1);
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
       if (campaign.status === "completed") return { success: true, leadsFound: 0, message: "Campaign already complete" };
 
       const result = await runOutreachRound(campaign, db);
@@ -201,17 +207,18 @@ export const outreachRouter = createRouter({
     }),
 
   /**
-   * Public by numeric id for the /leads result page and the ProVerify handoff.
-   * The result link is the capability. Ids are sequential, so this is an
-   * accepted product residual: do not add agent, admin, or password fields.
+   * Public by sealed id. Sequential integers are rejected so campaigns
+   * cannot be enumerated. The token is the capability for this result page.
    */
-  getCampaign: publicQuery.input(z.object({ id: z.number() })).query(async ({ input }) => {
+  getCampaign: publicQuery.input(z.object({ id: z.string().regex(CAPABILITY_TOKEN_PATTERN) })).query(async ({ input }) => {
     const db = getDb();
-    const [campaign] = await db.select().from(outreachCampaigns).where(eq(outreachCampaigns.id, input.id)).limit(1);
+    const campaignId = await openRecordId("outreach", input.id);
+    if (!campaignId) return null;
+    const [campaign] = await db.select().from(outreachCampaigns).where(eq(outreachCampaigns.id, campaignId)).limit(1);
     if (!campaign) return null;
 
-    const logs = await db.select().from(outreachLogs).where(eq(outreachLogs.campaignId, input.id)).orderBy(desc(outreachLogs.createdAt)).limit(500);
-    const leads = await db.select().from(professionalLeads).where(eq(professionalLeads.campaignId, input.id)).orderBy(desc(professionalLeads.createdAt)).limit(100);
+    const logs = await db.select().from(outreachLogs).where(eq(outreachLogs.campaignId, campaignId)).orderBy(desc(outreachLogs.createdAt)).limit(500);
+    const leads = await db.select().from(professionalLeads).where(eq(professionalLeads.campaignId, campaignId)).orderBy(desc(professionalLeads.createdAt)).limit(100);
 
     return { campaign, logs, leads };
   }),
@@ -243,14 +250,16 @@ export const outreachRouter = createRouter({
 
   /** Deliver leads to user (mark as delivered) */
   deliverLeads: publicQuery
-    .input(z.object({ campaignId: z.number() }))
+    .input(z.object({ id: z.string().regex(CAPABILITY_TOKEN_PATTERN) }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const campaignId = await openRecordId("outreach", input.id);
+      if (!campaignId) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
       await db.update(professionalLeads)
         .set({ isDelivered: true, deliveredAt: new Date() })
-        .where(eq(professionalLeads.campaignId, input.campaignId));
+        .where(eq(professionalLeads.campaignId, campaignId));
 
-      const leads = await db.select().from(professionalLeads).where(eq(professionalLeads.campaignId, input.campaignId));
+      const leads = await db.select().from(professionalLeads).where(eq(professionalLeads.campaignId, campaignId));
       return { success: true, deliveredCount: leads.length, leads };
     }),
 

@@ -10,6 +10,7 @@ import {
   createRouter,
   publicQuery,
   authedQuery,
+  adminQuery,
   assertSellerOrAdmin,
 } from "./middleware";
 import { getDb } from "./queries/connection";

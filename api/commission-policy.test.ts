@@ -71,4 +71,17 @@ describe("published commission policy", () => {
     const db = tierDb([{ minAmount: "10000", maxAmount: null, rate: "5.00" }]);
     await expect(getCommissionRateFromTiers(db, 5000)).resolves.toBe("7.00");
   });
+
+  it("ignores a stored 10% bracket and keeps 5% over $10,000", async () => {
+    const db = tierDb([
+      { minAmount: "0", maxAmount: "999.99", rate: "5.00" },
+      { minAmount: "1000", maxAmount: "10000", rate: "7.00" },
+      { minAmount: "10000.01", maxAmount: "50000", rate: "10.00" },
+      { minAmount: "50000.01", maxAmount: null, rate: "5.00" },
+    ]);
+    await expect(getCommissionRateFromTiers(db, 250)).resolves.toBe("5.00");
+    await expect(getCommissionRateFromTiers(db, 7500)).resolves.toBe("7.00");
+    await expect(getCommissionRateFromTiers(db, 20000)).resolves.toBe("5.00");
+    await expect(getCommissionRateFromTiers(db, 60000)).resolves.toBe("5.00");
+  });
 });

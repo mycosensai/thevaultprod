@@ -16,32 +16,15 @@ const erc20Abi = [
   },
 ] as const;
 
-let rpcQueue: Promise<void> = Promise.resolve();
-let lastRpcAt = 0;
-
-async function paceRpc(): Promise<void> {
-  const run = rpcQueue.then(async () => {
-    const wait = Math.max(0, lastRpcAt + 80 - Date.now());
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-    lastRpcAt = Date.now();
-  });
-  rpcQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  await run;
-}
-
 export async function publicRpc<T>(urls: readonly string[], method: string, params: unknown[]): Promise<T> {
   let lastError = "Public RPC unavailable";
   for (const url of urls) {
-    await paceRpc();
     try {
       const response = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(4_000),
       });
       if (!response.ok) {
         lastError = `HTTP ${response.status}`;

@@ -11,6 +11,7 @@ import { getDb } from "./queries/connection";
 import { shippingQuotes, listings, saleTransactions } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { logAudit, getClientIP } from "./security";
+import { CARRIER_QUOTE_PAGES } from "../src/lib/carrier-links";
 
 // ─── Simulated Shipping Rates ───
 // In production, these would call actual carrier APIs
@@ -82,12 +83,9 @@ function simulateShippingRates(
   ];
 }
 
-const CARRIER_LINKS: Record<string, string> = {
-  usps: "https://postcalc.usps.com/",
-  ups: "https://www.ups.com/ups/quote",
-  fedex: "https://www.fedex.com/en-us/shipping/rates.html",
-  dhl: "https://www.dhl.com/us-en/home/quote.html",
-};
+const CARRIER_LINKS: Record<string, string> = Object.fromEntries(
+  CARRIER_QUOTE_PAGES.map((carrier) => [carrier.id, carrier.url]),
+);
 
 export const shippingRouter = createRouter({
   /**

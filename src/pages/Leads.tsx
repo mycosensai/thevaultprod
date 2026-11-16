@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router'
 import { trpc } from '@/providers/trpc'
+import { isCapabilityToken } from '@/lib/capability-token'
 import {
   Diamond, ArrowLeft, Loader2, Users, Star, CheckCircle2, Target,
   Clock, Mail, TrendingUp
@@ -7,11 +8,11 @@ import {
 
 export default function Leads() {
   const { id } = useParams<{ id: string }>()
-  const campaignId = parseInt(id || '0')
+  const token = isCapabilityToken(id) ? id : ""
 
   const { data: campaignData, isLoading, refetch } = trpc.outreach.getCampaign.useQuery(
-    { id: campaignId },
-    { refetchInterval: 8000 }
+    { id: token },
+    { enabled: Boolean(token), refetchInterval: token ? 8000 : false }
   )
 
   const runNext = trpc.outreach.runNextRound.useMutation({
@@ -25,6 +26,15 @@ export default function Leads() {
   if (isLoading) return <div className="min-h-screen pt-32 flex justify-center"><Loader2 className="w-8 h-8 text-[#C9A84C] animate-spin" /></div>
 
   const { campaign, leads, logs } = campaignData || { campaign: null, leads: [], logs: [] }
+
+  if (!token || !campaign) {
+    return (
+      <div className="min-h-screen pt-32 px-4 text-center">
+        <p className="font-cinzel text-lg text-[#C8BC98] tracking-[3px]">Campaign not found</p>
+        <Link to="/proverify" className="text-[#C9A84C] text-xs mt-4 inline-block hover:underline">Start a new verification</Link>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8">
@@ -100,14 +110,14 @@ export default function Leads() {
             {/* Actions */}
             <div className="flex flex-wrap gap-3 justify-center">
               {campaign.status === 'running' && campaign.foundLeads < campaign.targetProfessionals && (
-                <button onClick={() => runNext.mutate({ campaignId: campaign.id })} disabled={runNext.isPending}
+                <button onClick={() => runNext.mutate({ id: token })} disabled={runNext.isPending}
                   className="flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[10px] tracking-[3px] uppercase font-bold hover:shadow-[0_0_40px_rgba(201,168,76,0.4)] disabled:opacity-50 transition-all">
                   {runNext.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
                   {runNext.isPending ? 'Searching...' : 'Find More Leads'}
                 </button>
               )}
               {campaign.foundLeads >= campaign.targetProfessionals && !leads.every((l: any) => l.isDelivered) && (
-                <button onClick={() => deliver.mutate({ campaignId: campaign.id })} disabled={deliver.isPending}
+                <button onClick={() => deliver.mutate({ id: token })} disabled={deliver.isPending}
                   className="flex items-center gap-2 px-6 py-3 border border-emerald-500 text-emerald-400 font-cinzel text-[10px] tracking-[3px] uppercase font-semibold hover:bg-emerald-500/10 disabled:opacity-50 transition-all">
                   {deliver.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   {deliver.isPending ? 'Delivering...' : 'Deliver All Leads'}
@@ -188,7 +198,7 @@ export default function Leads() {
             <p className="font-cinzel text-sm text-[#C8BC98] tracking-[2px] uppercase mb-2">No Leads Yet</p>
             <p className="text-xs text-[#8A6E2F] mb-4">AI is searching for interested professionals</p>
             {campaign && campaign.status === 'running' && (
-              <button onClick={() => runNext.mutate({ campaignId: campaign.id })} disabled={runNext.isPending}
+              <button onClick={() => runNext.mutate({ id: token })} disabled={runNext.isPending}
                 className="px-6 py-3 bg-gradient-to-br from-[#C9A84C] to-[#8A6E2F] text-[#080808] font-cinzel text-[10px] tracking-[3px] uppercase font-bold">
                 {runNext.isPending ? 'Searching...' : 'Search Now'}
               </button>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { CARRIER_QUOTE_PAGES } from '@/lib/carrier-links'
 import { useState } from 'react'
 import { trpc } from '@/providers/trpc'
 import {
@@ -219,18 +220,16 @@ export default function ProVerify() {
                   Plan your shipping costs before you sell. Get instant quotes from major carriers.
                 </p>
                 <div className="space-y-2">
-                  {[
-                    { name: 'USPS', url: 'https://postcalc.usps.com/', color: 'text-blue-400' },
-                    { name: 'UPS', url: 'https://www.ups.com/ups/quote', color: 'text-amber-400' },
-                    { name: 'FedEx', url: 'https://www.fedex.com/en-us/shipping/rates.html', color: 'text-purple-400' },
-                    { name: 'DHL', url: 'https://www.dhl.com/us-en/home/quote.html', color: 'text-red-400' },
-                  ].map((carrier) => (
+                  {CARRIER_QUOTE_PAGES.map((carrier) => {
+                    const color = carrier.id === 'usps' ? 'text-blue-400' : carrier.id === 'ups' ? 'text-amber-400' : carrier.id === 'fedex' ? 'text-purple-400' : 'text-red-400'
+                    return (
                     <a key={carrier.name} href={carrier.url} target="_blank" rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 bg-[#1E1E1E] border border-[#C9A84C]/10 hover:border-[#C9A84C]/30 transition-colors group">
-                      <span className={`text-[10px] font-cinzel font-semibold ${carrier.color}`}>{carrier.name}</span>
+                      <span className={`text-[10px] font-cinzel font-semibold ${color}`}>{carrier.name}</span>
                       <ExternalLink className="w-3 h-3 text-[#8A6E2F] group-hover:text-[#C9A84C] transition-colors" />
                     </a>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
 
@@ -316,6 +315,13 @@ export default function ProVerify() {
 
             <p className="text-sm text-[#C8BC98] mb-2">Review Fee: <span className="text-[#C9A84C] font-cinzel font-bold">${result?.reviewFee}</span></p>
             <p className="text-sm text-[#C8BC98] mb-8">Estimated turnaround: <span className="text-[#C9A84C]">{timeMap[priority]}</span></p>
+
+            {result?.applicationId && (
+              <Link to={`/proverify/${result.applicationId}`}
+                className="inline-flex items-center gap-2 mb-8 text-[10px] tracking-[3px] uppercase text-[#C9A84C] font-cinzel font-semibold hover:text-[#E8CB7A]">
+                View verification <ChevronRight className="w-3 h-3" />
+              </Link>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button onClick={() => { setStep('form'); setResult(null); }}
