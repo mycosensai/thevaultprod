@@ -57,9 +57,12 @@ export function orderUpdateDenial(input: {
 
   if (input.next.paymentStatus && !isAdmin) return "Forbidden";
 
+  const current = input.order.orderStatus || "pending";
+  const closed = current === "cancelled" || current === "refunded" || current === "delivered";
   const tracking = input.next.trackingNumber?.trim();
   if (tracking) {
     if (!isAdmin && !isSeller) return "Only the seller can add a tracking number";
+    if (!isAdmin && closed) return "This order is closed and cannot be shipped";
     if (!isAdmin && input.order.paymentStatus !== "completed") {
       return "Tracking can be added after payment is completed";
     }
@@ -68,11 +71,11 @@ export function orderUpdateDenial(input: {
   const nextStatus = input.next.orderStatus;
   if (!nextStatus || isAdmin) return null;
 
-  const current = input.order.orderStatus || "pending";
   if (isSeller) {
     switch (nextStatus) {
       case "confirmed":
       case "shipped":
+        if (closed) return "This order is closed and cannot be shipped";
         if (input.order.paymentStatus !== "completed") {
           return "Order status cannot advance before payment is completed";
         }

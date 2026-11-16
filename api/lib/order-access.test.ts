@@ -45,6 +45,9 @@ describe("order status permissions", () => {
       next: { orderStatus: "shipped" },
     })).toMatch(/payment/);
     expect(orderUpdateDenial({ ...seller, order: paid, sellerId: 9, next: { orderStatus: "refunded" } })).toMatch(/Sellers cannot/);
+    const cancelled = { userId: 4, paymentStatus: "completed", orderStatus: "cancelled" };
+    expect(orderUpdateDenial({ ...seller, order: cancelled, sellerId: 9, next: { orderStatus: "shipped" } })).toMatch(/closed/);
+    expect(orderUpdateDenial({ ...seller, order: cancelled, sellerId: 9, next: { trackingNumber: "1Z" } })).toMatch(/closed/);
   });
 
   it("lets an admin correct payment and status", () => {

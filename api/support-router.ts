@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, adminQuery, publicQuery } from "./middleware";
 import { getDb, getRawD1 } from "./queries/connection";
 import { supportRequests } from "@db/schema";
+import { sendEmail } from "./email-service";
 import { checkRateLimit, getClientIP } from "./security";
 
 const SUPPORT_EMAIL = "ratchetkrewelabs@gmail.com";
@@ -33,7 +35,21 @@ async function ensureSupportTable(): Promise<void> {
     .run();
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 export const supportRouter = createRouter({
+  list: adminQuery.query(async () => {
+    await ensureSupportTable();
+    const db = getDb();
+    return db.select().from(supportRequests).orderBy(desc(supportRequests.createdAt)).limit(50);
+  }),
+
   create: publicQuery.input(createInput).mutation(async ({ input, ctx }) => {
     const limit = await checkRateLimit(
       ctx.req,
@@ -58,6 +74,15 @@ export const supportRouter = createRouter({
         message: input.message,
         userId: ctx.user?.id ?? null,
       });
+      const mailed = await sendEmail({
+        to: SUPPORT_EMAIL,
+        subject: `Vault support: ${input.topic}`,
+        text: `From: ${input.name} <${input.email}>\nTopic: ${input.topic}\n\n${input.message}`,
+        html: `<p><strong>From:</strong> ${escapeHtml(input.name)} &lt;${escapeHtml(input.email)}&gt;</p><p><strong>Topic:</strong> ${escapeHtml(input.topic)}</p><pre>${escapeHtml(input.message)}</pre>`,
+      });
+      if (!mailed.success) {
+        console.error("[support] ticket stored; staff email was not sent");
+      }
     } catch (error) {
       console.error("[support] could not store ticket");
       if (error instanceof TRPCError) throw error;
